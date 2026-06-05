@@ -1,0 +1,221 @@
+export const dynamic = "force-dynamic";
+
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, CheckCircle, XCircle, Search, Clock, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { approveRegistration, rejectRegistration } from "./actions";
+import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/submit-button";
+import Image from "next/image";
+
+export default async function EventRegistrationsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await params;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  // 1. Fetch Event
+  const { data: event } = await supabase
+    .from("events")
+    .select("*")
+    .eq("id", eventId)
+    .eq("creator_id", user.id)
+    .single();
+
+  if (!event) {
+    redirect("/dashboard/events");
+  }
+
+  // 2. Fetch Registrations
+  const { data: registrations } = await supabase
+    .from("registrations")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("registered_at", { ascending: false });
+
+  // Generate signed URLs in batch for all screenshots
+  const pathsToSign = registrations
+    ?.map(r => r.payment_screenshot_url)
+    .filter(Boolean) as string[] || [];
+    
+  let signedUrlMap: Record<string, string> = {};
+  
+  if (pathsToSign.length > 0) {
+    const { data: signedUrls } = await supabase.storage
+      .from("payment-screenshots")
+      .createSignedUrls(pathsToSign, 60 * 60); // 1 hour expiry
+      
+    if (signedUrls) {
+      signedUrls.forEach(su => {
+        if (su.path && su.signedUrl) {
+          signedUrlMap[su.path] = su.signedUrl;
+        }
+      });
+    }
+  }
+
+  const totalRegistrations = registrations?.length || 0;
+  const pendingRegistrations = registrations?.filter(r => r.status === 'pending').length || 0;
+  const approvedRegistrations = registrations?.filter(r => r.status === 'approved').length || 0;
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-12 pb-10 animate-in fade-in duration-700">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard/events">
+            <Button variant="ghost" size="icon" className="rounded-full hover:bg-[#f5f5f7]">
+              <ArrowLeft className="w-5 h-5 text-[#1d1d1f]" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-4xl font-semibold tracking-tight text-[#1d1d1f]">Manage Registrations</h1>
+            <p className="text-[#86868b] mt-1 text-lg font-medium">{event.name}</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {event.google_sheet_id && (
+            <Link href={`https://docs.google.com/spreadsheets/d/${event.google_sheet_id}`} target="_blank">
+              <Button variant="outline" className="rounded-full bg-[#f5f5f7]/50 text-[#1d1d1f] border-[#e5e5ea] hover:bg-[#f5f5f7] hover:text-[#1d1d1f] font-medium h-11 px-6 shadow-sm transition-all">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                View Google Sheet
+              </Button>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden">
+          <CardContent className="p-7">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[15px] font-medium text-[#86868b]">Pending Approvals</p>
+              <div className="p-2 bg-[#ff3b30]/10 text-[#ff3b30] rounded-full">
+                <Clock className="w-5 h-5" />
+              </div>
+            </div>
+            <h3 className="text-4xl font-semibold text-[#1d1d1f] tracking-tight">{pendingRegistrations}</h3>
+          </CardContent>
+        </Card>
+        
+        <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden">
+          <CardContent className="p-7">
+             <div className="flex items-center justify-between mb-2">
+              <p className="text-[15px] font-medium text-[#86868b]">Approved</p>
+              <div className="p-2 bg-[#34c759]/10 text-[#34c759] rounded-full">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+            </div>
+            <h3 className="text-4xl font-semibold text-[#1d1d1f] tracking-tight">{approvedRegistrations}</h3>
+          </CardContent>
+        </Card>
+        
+        <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden">
+          <CardContent className="p-7">
+             <div className="flex items-center justify-between mb-2">
+              <p className="text-[15px] font-medium text-[#86868b]">Total Received</p>
+              <div className="p-2 bg-[#0066cc]/10 text-[#0066cc] rounded-full">
+                <Search className="w-5 h-5" />
+              </div>
+            </div>
+            <h3 className="text-4xl font-semibold text-[#1d1d1f] tracking-tight">{totalRegistrations} <span className="text-[#86868b] text-2xl font-medium">/ {event.max_capacity}</span></h3>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Registrations List */}
+      <div className="space-y-6 pt-4">
+        <div className="flex items-center justify-between px-2">
+          <h2 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">All Registrations</h2>
+          <span className="text-[#86868b] text-[15px] font-medium">Review and process payments</span>
+        </div>
+
+        <div className="bg-white rounded-[24px] border border-[#f5f5f7] shadow-sm overflow-hidden">
+          <div className="divide-y divide-[#f5f5f7]">
+            {registrations?.length === 0 ? (
+               <div className="p-16 text-center text-[#86868b] font-medium">
+                 No registrations received yet.
+               </div>
+            ) : (
+              registrations?.map((reg) => (
+                <div key={reg.id} className="p-6 md:px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-[#f5f5f7]/50 transition-colors group">
+                  
+                  {/* Info */}
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-[17px] font-semibold text-[#1d1d1f]">{reg.full_name}</h3>
+                      {reg.status === 'pending' && <Badge variant="secondary" className="bg-[#ff3b30]/10 text-[#ff3b30] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Pending</Badge>}
+                      {reg.status === 'approved' && <Badge variant="secondary" className="bg-[#34c759]/10 text-[#34c759] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Approved</Badge>}
+                      {reg.status === 'rejected' && <Badge variant="secondary" className="bg-[#86868b]/10 text-[#86868b] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Rejected</Badge>}
+                    </div>
+                    <div className="text-[15px] text-[#86868b] flex flex-wrap gap-x-5 gap-y-1">
+                      <span>Email: <span className="text-[#1d1d1f] font-medium">{reg.email}</span></span>
+                      <span>Phone: <span className="text-[#1d1d1f] font-medium">{reg.phone}</span></span>
+                      {reg.herbalife_id && <span>HLF ID: <span className="text-[#1d1d1f] font-medium">{reg.herbalife_id}</span></span>}
+                    </div>
+                    <div className="text-[14px] text-[#86868b] mt-3 flex items-center">
+                      UTR ID: <code className="ml-2 bg-[#f5f5f7] px-2.5 py-1 rounded-md text-[#1d1d1f] font-mono tracking-wider text-sm border border-[#e5e5ea]">{reg.utr_id}</code>
+                    </div>
+                  </div>
+
+                  {/* Screenshot */}
+                  <div className="w-32 h-20 relative rounded-xl overflow-hidden border border-[#e5e5ea] bg-[#f5f5f7] flex-shrink-0 shadow-sm group-hover:shadow-md transition-all">
+                    {reg.payment_screenshot_url && signedUrlMap[reg.payment_screenshot_url] ? (
+                      <a href={signedUrlMap[reg.payment_screenshot_url]} target="_blank" rel="noopener noreferrer">
+                        <Image 
+                          src={signedUrlMap[reg.payment_screenshot_url]}
+                          alt="Payment Screenshot"
+                          fill
+                          className="object-cover hover:opacity-80 transition-opacity"
+                          unoptimized
+                        />
+                      </a>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[11px] font-medium text-[#86868b] uppercase tracking-wider">No Image</div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 md:pl-4">
+                    {reg.status === 'pending' ? (
+                      <>
+                        <form action={async () => {
+                          "use server";
+                          await approveRegistration(reg.id, eventId);
+                        }}>
+                          <SubmitButton size="sm" className="bg-[#34c759] hover:bg-[#2eb050] text-white rounded-full px-5 h-9 font-medium transition-colors shadow-sm" pendingText="Approving...">
+                            <CheckCircle className="w-4 h-4 mr-1.5" /> Approve
+                          </SubmitButton>
+                        </form>
+                        <form action={async () => {
+                          "use server";
+                          await rejectRegistration(reg.id, eventId);
+                        }}>
+                          <SubmitButton variant="outline" size="sm" className="text-[#ff3b30] border-[#ff3b30]/20 hover:bg-[#ff3b30]/10 rounded-full px-5 h-9 font-medium transition-colors" pendingText="Rejecting...">
+                            <XCircle className="w-4 h-4 mr-1.5" /> Reject
+                          </SubmitButton>
+                        </form>
+                      </>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled className="rounded-full px-6 h-9 opacity-50 bg-[#f5f5f7] border-transparent font-medium">
+                        Processed
+                      </Button>
+                    )}
+                  </div>
+
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
