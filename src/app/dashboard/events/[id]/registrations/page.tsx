@@ -60,7 +60,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
     }
   }
 
-  const totalRegistrations = registrations?.length || 0;
+  const totalRegistrations = registrations?.filter(r => r.status !== 'rejected').length || 0;
   const pendingRegistrations = registrations?.filter(r => r.status === 'pending').length || 0;
   const approvedRegistrations = registrations?.filter(r => r.status === 'approved').length || 0;
 
@@ -186,18 +186,12 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                   <div className="flex items-center gap-2 md:pl-4">
                     {reg.status === 'pending' ? (
                       <>
-                        <form action={async () => {
-                          "use server";
-                          await approveRegistration(reg.id, eventId);
-                        }}>
+                        <form action={approveRegistration.bind(null, reg.id, eventId)}>
                           <SubmitButton size="sm" className="bg-[#34c759] hover:bg-[#2eb050] text-white rounded-full px-5 h-9 font-medium transition-colors shadow-sm" pendingText="Approving...">
                             <CheckCircle className="w-4 h-4 mr-1.5" /> Approve
                           </SubmitButton>
                         </form>
-                        <form action={async () => {
-                          "use server";
-                          await rejectRegistration(reg.id, eventId);
-                        }}>
+                        <form action={rejectRegistration.bind(null, reg.id, eventId)}>
                           <SubmitButton variant="outline" size="sm" className="text-[#ff3b30] border-[#ff3b30]/20 hover:bg-[#ff3b30]/10 rounded-full px-5 h-9 font-medium transition-colors" pendingText="Rejecting...">
                             <XCircle className="w-4 h-4 mr-1.5" /> Reject
                           </SubmitButton>

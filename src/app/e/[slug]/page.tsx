@@ -61,6 +61,15 @@ export default async function PublicEventPage({ params, searchParams }: { params
     );
   }
 
+  // Check Capacity (do not count rejected registrations)
+  const { count: currentRegistrationsCount } = await supabase
+    .from("registrations")
+    .select("*", { count: 'exact', head: true })
+    .eq("event_id", event.id)
+    .neq("status", "rejected");
+
+  const isSoldOut = (currentRegistrationsCount || 0) >= event.max_capacity;
+
   const formConfig = event.form_config || [];
 
   return (
@@ -95,100 +104,114 @@ export default async function PublicEventPage({ params, searchParams }: { params
 
           <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden">
             <div className="bg-white p-6 md:p-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Registration Details</h2>
-              <p className="text-gray-500 mb-8">{event.description}</p>
-              
-              <form 
-                action={async (formData) => {
-                  "use server";
-                  await submitRegistration(event.id, event.slug, formData);
-                }} 
-                className="space-y-6"
-              >
-                {/* Dynamic Fields */}
-                {formConfig.map((field: any) => (
-                  <div key={field.id} className="space-y-2">
-                    <Label htmlFor={field.id} className="text-gray-700 font-medium">
-                      {field.label} {field.required && <span className="text-red-500">*</span>}
-                    </Label>
-                    
-                    {field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "number" ? (
-                      <Input 
-                        id={field.id} 
-                        name={field.id} 
-                        type={field.type === "phone" ? "tel" : field.type} 
-                        placeholder={field.placeholder} 
-                        required={field.required} 
-                        className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6"
-                      />
-                    ) : field.type === "dropdown" ? (
-                      <Select name={field.id} required={field.required}>
-                        <SelectTrigger className="rounded-xl bg-gray-50/50 py-6">
-                          <SelectValue placeholder="Select an option" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options?.split(',').map((opt: string) => (
-                            <SelectItem key={opt.trim()} value={opt.trim()}>{opt.trim()}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : field.type === "checkbox" ? (
-                      <div className="flex items-center space-x-3 bg-gray-50/50 p-4 rounded-xl border border-input">
-                        <Switch id={field.id} name={field.id} required={field.required} />
-                        <Label htmlFor={field.id} className="text-sm font-normal text-gray-600 cursor-pointer">{field.placeholder || "Yes, I agree"}</Label>
-                      </div>
-                    ) : field.type === "file" ? (
-                      <Input 
-                        id={field.id} 
-                        name={field.id} 
-                        type="file" 
-                        required={field.required} 
-                        className="rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                      />
-                    ) : null}
+              {isSoldOut ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <AlertCircle className="w-10 h-10 text-gray-400" />
                   </div>
-                ))}
-
-                <hr className="my-8 border-gray-100" />
-
-                {/* Mandatory Payment Section */}
-                <div className="space-y-6">
-                  <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
-                  <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
-                    Please ensure you have sent <strong>₹{event.price}</strong> to the UPI details shown on the right before submitting this form.
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="utr_id" className="text-gray-700 font-medium">UTR / Transaction ID <span className="text-red-500">*</span></Label>
-                    <Input 
-                      id="utr_id" 
-                      name="utr_id" 
-                      placeholder="e.g. 123456789012" 
-                      required 
-                      className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6 font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="payment_screenshot" className="text-gray-700 font-medium">Payment Screenshot <span className="text-red-500">*</span></Label>
-                    <Input 
-                      id="payment_screenshot" 
-                      name="payment_screenshot" 
-                      type="file" 
-                      accept="image/*"
-                      required 
-                      className="rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                    />
-                  </div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-4">Event Sold Out</h2>
+                  <p className="text-gray-500 mb-8 leading-relaxed max-w-md mx-auto">
+                    We're sorry, but this event has reached its maximum capacity. No further registrations can be accepted at this time.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Registration Details</h2>
+                  <p className="text-gray-500 mb-8">{event.description}</p>
+                  
+                  <form 
+                    action={async (formData) => {
+                      "use server";
+                      await submitRegistration(event.id, event.slug, formData);
+                    }} 
+                    className="space-y-6"
+                  >
+                    {/* Dynamic Fields */}
+                    {formConfig.map((field: any) => (
+                      <div key={field.id} className="space-y-2">
+                        <Label htmlFor={field.id} className="text-gray-700 font-medium">
+                          {field.label} {field.required && <span className="text-red-500">*</span>}
+                        </Label>
+                        
+                        {field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "number" ? (
+                          <Input 
+                            id={field.id} 
+                            name={field.id} 
+                            type={field.type === "phone" ? "tel" : field.type} 
+                            placeholder={field.placeholder} 
+                            required={field.required} 
+                            className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6"
+                          />
+                        ) : field.type === "dropdown" ? (
+                          <Select name={field.id} required={field.required}>
+                            <SelectTrigger className="rounded-xl bg-gray-50/50 py-6">
+                              <SelectValue placeholder="Select an option" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options?.split(',').map((opt: string) => (
+                                <SelectItem key={opt.trim()} value={opt.trim()}>{opt.trim()}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : field.type === "checkbox" ? (
+                          <div className="flex items-center space-x-3 bg-gray-50/50 p-4 rounded-xl border border-input">
+                            <Switch id={field.id} name={field.id} required={field.required} />
+                            <Label htmlFor={field.id} className="text-sm font-normal text-gray-600 cursor-pointer">{field.placeholder || "Yes, I agree"}</Label>
+                          </div>
+                        ) : field.type === "file" ? (
+                          <Input 
+                            id={field.id} 
+                            name={field.id} 
+                            type="file" 
+                            required={field.required} 
+                            className="rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                          />
+                        ) : null}
+                      </div>
+                    ))}
 
-                <SubmitButton 
-                  className="w-full py-6 text-base font-semibold rounded-xl bg-gray-900 hover:bg-primary transition-all duration-300 text-white shadow-md hover:shadow-primary/25 mt-8"
-                  pendingText="Submitting..."
-                >
-                  Submit Registration
-                </SubmitButton>
-              </form>
+                    <hr className="my-8 border-gray-100" />
+
+                    {/* Mandatory Payment Section */}
+                    <div className="space-y-6">
+                      <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
+                      <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
+                        Please ensure you have sent <strong>₹{event.price}</strong> to the UPI details shown on the right before submitting this form.
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="utr_id" className="text-gray-700 font-medium">UTR / Transaction ID <span className="text-red-500">*</span></Label>
+                        <Input 
+                          id="utr_id" 
+                          name="utr_id" 
+                          placeholder="e.g. 123456789012" 
+                          required 
+                          className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6 font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="payment_screenshot" className="text-gray-700 font-medium">Payment Screenshot <span className="text-red-500">*</span></Label>
+                        <Input 
+                          id="payment_screenshot" 
+                          name="payment_screenshot" 
+                          type="file" 
+                          accept="image/*"
+                          required 
+                          className="rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <SubmitButton 
+                      className="w-full py-6 text-base font-semibold rounded-xl bg-gray-900 hover:bg-primary transition-all duration-300 text-white shadow-md hover:shadow-primary/25 mt-8"
+                      pendingText="Submitting..."
+                    >
+                      Submit Registration
+                    </SubmitButton>
+                  </form>
+                </>
+              )}
             </div>
           </Card>
         </div>
