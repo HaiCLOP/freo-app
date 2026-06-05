@@ -14,6 +14,26 @@ import { Calendar, MapPin, IndianRupee, CheckCircle2, AlertCircle } from "lucide
 import { submitRegistration } from "./actions";
 import Image from "next/image";
 import Link from "next/link";
+import { Metadata } from "next";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const resolvedParams = await params;
+  const supabase = await createClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("name")
+    .eq("slug", resolvedParams.slug)
+    .single();
+
+  if (!event) {
+    return { title: 'Event Not Found' };
+  }
+
+  return {
+    title: event.name,
+    description: `Register for ${event.name} on Freo.`,
+  };
+}
 
 export default async function PublicEventPage({ params, searchParams }: { params: Promise<{ slug: string }>, searchParams: Promise<{ success?: string, error?: string }> }) {
   const resolvedParams = await params;

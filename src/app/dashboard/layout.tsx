@@ -8,6 +8,11 @@ import Image from "next/image";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { TopNav } from "@/components/dashboard/top-nav";
 import { LogoutButton } from "@/components/dashboard/logout-button";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: 'Dashboard | Freo',
+};
 
 export default async function DashboardLayout({
   children,

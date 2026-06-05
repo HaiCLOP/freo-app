@@ -5,6 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Lock, Mail, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: 'Login | Freo',
+};
 
 export default async function LoginPage({
   searchParams,
