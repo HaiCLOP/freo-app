@@ -33,28 +33,34 @@ export default async function PublicEventPage({ params, searchParams }: { params
 
   if (resolvedSearchParams.success) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <Card className="max-w-md w-full border-none shadow-xl rounded-3xl p-8 text-center bg-white">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 className="w-10 h-10 text-green-600" />
+      <div className="min-h-screen bg-[#1d1d1f] flex flex-col items-center justify-center p-6 animate-in fade-in duration-1000">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-[#ddfe55]/5 blur-[120px]" />
+          <div className="absolute top-[60%] -right-[10%] w-[60%] h-[60%] rounded-full bg-[#ddfe55]/5 blur-[120px]" />
+        </div>
+        
+        <div className="max-w-md w-full bg-[#2a2b2f]/50 backdrop-blur-xl border border-white/5 shadow-2xl rounded-3xl p-10 text-center relative z-10">
+          <div className="w-24 h-24 bg-[#ddfe55]/10 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_40px_rgba(221,254,85,0.15)] animate-in zoom-in-50 duration-700">
+            <CheckCircle2 className="w-12 h-12 text-[#ddfe55]" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Registration Received!</h1>
-          <p className="text-gray-500 mb-8 leading-relaxed">
-            Your details and payment screenshot have been submitted to the organizer. You'll receive a confirmation email with your ticket once they approve it.
+          <h1 className="text-3xl font-semibold text-white mb-4 tracking-tight">Registration Received!</h1>
+          <p className="text-[#a1a1aa] mb-10 leading-relaxed text-[15px]">
+            Your details and payment screenshot have been submitted to the organizer. You'll receive a confirmation email with your digital ticket once they approve it.
           </p>
-          <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-600 mb-8 border border-gray-100">
+          <div className="bg-black/20 p-5 rounded-2xl text-[14px] text-[#ddfe55]/80 font-medium border border-white/5 flex items-center justify-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
             A copy of this receipt has been sent to your email.
           </div>
-        </Card>
+        </div>
         
         {/* Footer Branding */}
-        <div className="mt-12 flex flex-col items-center gap-4 text-center text-sm font-medium text-gray-500">
+        <div className="mt-12 flex flex-col items-center gap-4 text-center text-sm font-medium text-[#71717a] relative z-10">
           <div className="flex items-center gap-2 justify-center">
-            Powered by <span className="font-bold text-gray-900 font-[family-name:var(--font-fredoka)]">Freo</span> &middot; Built by <a href="https://haicloplabs.in" target="_blank" rel="noopener noreferrer" className="font-bold text-blue-600 hover:text-blue-700 hover:underline">HaiCLOP Labs</a>
+            Powered by <span className="font-bold text-white font-[family-name:var(--font-fredoka)]">Freo</span> &middot; Built by <a href="https://haicloplabs.in" target="_blank" rel="noopener noreferrer" className="font-bold text-[#ddfe55] hover:text-[#ddfe55]/80 hover:underline transition-colors">HaiCLOP Labs</a>
           </div>
-          <div className="flex gap-4 text-xs">
-            <Link href="/privacy" className="hover:text-gray-900 transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-gray-900 transition-colors">Terms of Service</Link>
+          <div className="flex gap-6 text-xs">
+            <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>

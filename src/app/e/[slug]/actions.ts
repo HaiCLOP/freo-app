@@ -130,15 +130,47 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       to: email,
       subject: `Registration Received - ${event.name}`,
       html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #333;">Registration Received! 🎉</h2>
-          <p>Hi ${full_name},</p>
-          <p>We've successfully received your registration and payment details for <strong>${event.name}</strong>.</p>
-          <p>Your registration is currently <strong>PENDING APPROVAL</strong> by the event organizer.</p>
-          <p>Once approved, you will receive another email with your digital ticket and QR code.</p>
-          <br/>
-          <p>Best regards,<br/>The Freo Team</p>
-        </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; padding: 0; background-color: #121212; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+            .container { max-width: 600px; margin: 40px auto; background-color: #1d1d1f; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+            .header { background-color: #ddfe55; padding: 40px 20px; text-align: center; }
+            .header h1 { margin: 0; color: #1d1d1f; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+            .content { padding: 40px; color: #ffffff; }
+            .content p { font-size: 16px; line-height: 1.6; color: #a1a1aa; margin-bottom: 24px; }
+            .content strong { color: #ffffff; }
+            .status-box { background-color: rgba(221, 254, 85, 0.1); border: 1px solid rgba(221, 254, 85, 0.2); border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0; }
+            .status-text { color: #ddfe55; font-weight: 600; font-size: 18px; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
+            .footer { padding: 30px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
+            .footer p { margin: 0; color: #71717a; font-size: 14px; }
+            .brand { color: #ddfe55; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Registration Received!</h1>
+            </div>
+            <div class="content">
+              <p>Hi <strong>${full_name}</strong>,</p>
+              <p>We've successfully received your registration and payment details for <strong>${event.name}</strong>.</p>
+              
+              <div class="status-box">
+                <p class="status-text">Pending Approval</p>
+              </div>
+              
+              <p>Your registration is currently under review by the event organizer. Once your payment is verified and approved, you will receive another email containing your official digital ticket and QR code.</p>
+            </div>
+            <div class="footer">
+              <p>Powered by <span class="brand">Freo</span></p>
+            </div>
+          </div>
+        </body>
+        </html>
       `
     });
   } catch (emailError) {

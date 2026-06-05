@@ -75,18 +75,46 @@ export async function approveRegistration(registrationId: string, eventId: strin
       to: reg.email,
       subject: `Ticket Approved! 🎟️ - ${event.name}`,
       html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #6C63FF; margin: 0;">Ticket Approved!</h1>
-            <p style="color: #666;">You're all set for ${event.name}</p>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; padding: 0; background-color: #121212; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+            .container { max-width: 600px; margin: 40px auto; background-color: #1d1d1f; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+            .header { background-color: #ddfe55; padding: 40px 20px; text-align: center; }
+            .header h1 { margin: 0; color: #1d1d1f; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+            .content { padding: 40px; color: #ffffff; text-align: center; }
+            .content p { font-size: 16px; line-height: 1.6; color: #a1a1aa; margin-bottom: 24px; }
+            .content strong { color: #ffffff; font-size: 18px; }
+            .qr-box { background-color: #2a2b2f; border: 1px solid rgba(255,255,255,0.05); border-radius: 20px; padding: 30px; margin: 30px 0; display: inline-block; }
+            .qr-image { width: 250px; height: 250px; border-radius: 12px; margin-bottom: 16px; border: 4px solid #ffffff; }
+            .footer { padding: 30px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
+            .footer p { margin: 0; color: #71717a; font-size: 14px; }
+            .brand { color: #ddfe55; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Ticket Approved! 🎟️</h1>
+            </div>
+            <div class="content">
+              <p>You're all set for <strong>${event.name}</strong></p>
+              
+              <div class="qr-box">
+                <p style="margin-top: 0;"><strong>${reg.full_name}</strong></p>
+                <img src="${qrUrl}" alt="Your Digital Ticket QR Code" class="qr-image" />
+                <p style="margin-bottom: 0; font-size: 14px; color: #ddfe55;">Present this QR code at the check-in desk</p>
+              </div>
+            </div>
+            <div class="footer">
+              <p>Powered by <span class="brand">Freo</span></p>
+            </div>
           </div>
-          
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; text-align: center;">
-            <p style="margin: 0 0 16px 0; font-size: 16px; color: #333;"><strong>${reg.full_name}</strong></p>
-            <img src="${qrUrl}" alt="Your Digital Ticket QR Code" style="width: 250px; height: 250px; border-radius: 8px; margin-bottom: 16px;" />
-            <p style="margin: 0; color: #64748b; font-size: 14px;">Please present this QR code at the check-in desk.</p>
-          </div>
-        </div>
+        </body>
+        </html>
       `
     });
   } catch (emailErr) {
@@ -143,13 +171,47 @@ export async function rejectRegistration(registrationId: string, eventId: string
       to: reg.email,
       subject: `Registration Update - ${event.name}`,
       html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #ef4444;">Registration Update</h2>
-          <p>Hi ${reg.full_name},</p>
-          <p>Unfortunately, your registration for <strong>${event.name}</strong> could not be approved at this time.</p>
-          <p>This is usually because the payment screenshot could not be verified or the UTR ID did not match our records.</p>
-          <p>Please contact the event organizer if you believe this is a mistake.</p>
-        </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; padding: 0; background-color: #121212; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+            .container { max-width: 600px; margin: 40px auto; background-color: #1d1d1f; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+            .header { background-color: #ff3b30; padding: 40px 20px; text-align: center; }
+            .header h1 { margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+            .content { padding: 40px; color: #ffffff; }
+            .content p { font-size: 16px; line-height: 1.6; color: #a1a1aa; margin-bottom: 24px; }
+            .content strong { color: #ffffff; }
+            .status-box { background-color: rgba(255, 59, 48, 0.1); border: 1px solid rgba(255, 59, 48, 0.2); border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0; }
+            .status-text { color: #ff3b30; font-weight: 600; font-size: 18px; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
+            .footer { padding: 30px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
+            .footer p { margin: 0; color: #71717a; font-size: 14px; }
+            .brand { color: #ddfe55; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Registration Update</h1>
+            </div>
+            <div class="content">
+              <p>Hi <strong>${reg.full_name}</strong>,</p>
+              <p>Unfortunately, your registration for <strong>${event.name}</strong> could not be approved at this time.</p>
+              
+              <div class="status-box">
+                <p class="status-text">Registration Rejected</p>
+              </div>
+              
+              <p>This is usually because the payment screenshot could not be verified or the UTR ID did not match our records. Please contact the event organizer if you believe this is a mistake and wish to re-register.</p>
+            </div>
+            <div class="footer">
+              <p>Powered by <span class="brand">Freo</span></p>
+            </div>
+          </div>
+        </body>
+        </html>
       `
     });
   } catch (emailErr) {
