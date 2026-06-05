@@ -66,14 +66,14 @@ export async function approveRegistration(registrationId: string, eventId: strin
     sponsorName: reg.sponsor_name || "",
     eventName: event.name
   });
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}&color=6C63FF`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}&color=DDFE55&bgcolor=1d1d1f`;
 
   // Send Approval Email with Digital Ticket
   try {
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
       to: reg.email,
-      subject: `Ticket Approved! 🎟️ - ${event.name}`,
+      subject: `Ticket Approved! - ${event.name}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -89,7 +89,7 @@ export async function approveRegistration(registrationId: string, eventId: strin
             .content p { font-size: 16px; line-height: 1.6; color: #a1a1aa; margin-bottom: 24px; }
             .content strong { color: #ffffff; font-size: 18px; }
             .qr-box { background-color: #2a2b2f; border: 1px solid rgba(255,255,255,0.05); border-radius: 20px; padding: 30px; margin: 30px 0; display: inline-block; }
-            .qr-image { width: 250px; height: 250px; border-radius: 12px; margin-bottom: 16px; border: 4px solid #ffffff; }
+            .qr-image { width: 250px; height: 250px; border-radius: 12px; margin-bottom: 16px; border: 4px solid #1d1d1f; }
             .footer { padding: 30px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
             .footer p { margin: 0; color: #71717a; font-size: 14px; }
             .brand { color: #ddfe55; font-weight: bold; }
@@ -98,7 +98,7 @@ export async function approveRegistration(registrationId: string, eventId: strin
         <body>
           <div class="container">
             <div class="header">
-              <h1>Ticket Approved! 🎟️</h1>
+              <h1>Ticket Approved!</h1>
             </div>
             <div class="content">
               <p>You're all set for <strong>${event.name}</strong></p>
