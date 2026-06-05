@@ -26,6 +26,9 @@ const nextConfig: NextConfig = {
         ]
       }
     ]
+  },
+  serverActions: {
+    allowedOrigins: ["freo.haicloplabs.in", "localhost:3000"]
   }
 };
 
