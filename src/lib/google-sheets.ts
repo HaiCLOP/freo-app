@@ -4,7 +4,14 @@ export async function initializeGoogleSheet(spreadsheetId: string) {
   const credentialsBase64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!credentialsBase64) return;
 
-  const credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
+  let credentialsJson;
+  try {
+    credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
+  } catch (e) {
+    console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY. Is it valid base64 JSON?");
+    return;
+  }
+  
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: credentialsJson.client_email,
@@ -123,7 +130,13 @@ export async function appendRowToSheet(spreadsheetId: string, values: any[]) {
   const credentialsBase64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!credentialsBase64) return;
 
-  const credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
+  let credentialsJson;
+  try {
+    credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
+  } catch (e) {
+    console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY. Is it valid base64 JSON?");
+    return;
+  }
 
   const auth = new google.auth.GoogleAuth({
     credentials: {
@@ -193,7 +206,13 @@ export async function updateRowStatusInSheet(
   const credentialsBase64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!credentialsBase64) return;
 
-  const credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
+  let credentialsJson;
+  try {
+    credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
+  } catch (e) {
+    console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY. Is it valid base64 JSON?");
+    return;
+  }
 
   const auth = new google.auth.GoogleAuth({
     credentials: {
