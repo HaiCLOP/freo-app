@@ -29,7 +29,8 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ["freo.haicloplabs.in"]
+      allowedOrigins: ["freo.haicloplabs.in"],
+      bodySizeLimit: '10mb'
     }
   }
 };
