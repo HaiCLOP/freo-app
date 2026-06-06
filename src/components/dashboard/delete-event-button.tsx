@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
 import { deleteEvent } from "@/app/dashboard/events/actions";
 import { useRouter } from "next/navigation";
 
@@ -28,10 +28,14 @@ export function DeleteEventButton({ eventId }: { eventId: string }) {
     <button 
       onClick={handleDelete}
       disabled={isDeleting}
-      className="w-8 h-8 rounded-full flex items-center justify-center text-[#ff3b30] hover:bg-[#ff3b30]/10 border border-transparent transition-all disabled:opacity-50" 
+      className="w-8 h-8 rounded-full flex items-center justify-center text-[#ff3b30] hover:bg-[#ff3b30]/10 border border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed" 
       title="Delete Event"
     >
-      <Trash2 className="w-4 h-4" />
+      {isDeleting ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (
+        <Trash2 className="w-4 h-4" />
+      )}
     </button>
   );
 }

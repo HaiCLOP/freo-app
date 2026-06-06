@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Calendar, MapPin, IndianRupee, CheckCircle2, AlertCircle } from "lucide-react";
+import { Calendar, MapPin, IndianRupee, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { submitRegistration } from "./actions";
 import Image from "next/image";
 import Link from "next/link";
@@ -87,14 +87,43 @@ export default async function PublicEventPage({ params, searchParams }: { params
     );
   }
 
-  // Check Capacity (do not count rejected registrations)
-  const { count: currentRegistrationsCount } = await supabase
+  // Check total capacity (do not count rejected registrations)
+  const { count: totalRegistrations } = await supabase
     .from("registrations")
     .select("*", { count: 'exact', head: true })
     .eq("event_id", event.id)
     .neq("status", "rejected");
 
-  const isSoldOut = (currentRegistrationsCount || 0) >= event.max_capacity;
+  const isSoldOut = (totalRegistrations || 0) >= event.max_capacity;
+
+  // Check daily phase limit
+  let isDailyLimitReached = false;
+  let todayCount = 0;
+  const dailyLimit = event.daily_reg_limit || 100;
+
+  if (event.phase_registration && !isSoldOut) {
+    // Count registrations made today (IST timezone)
+    const nowStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    const istNow = new Date(nowStr);
+    
+    // Create Date objects representing 00:00:00 and 23:59:59 in IST
+    const todayStart = new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 0, 0, 0);
+    const todayEnd = new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 23, 59, 59, 999);
+
+    const { count: todayRegistrations } = await supabase
+      .from("registrations")
+      .select("*", { count: 'exact', head: true })
+      .eq("event_id", event.id)
+      .neq("status", "rejected")
+      .gte("registered_at", todayStart.toISOString())
+      .lte("registered_at", todayEnd.toISOString());
+
+    todayCount = todayRegistrations || 0;
+    isDailyLimitReached = todayCount >= dailyLimit;
+  }
+
+  const spotsRemaining = event.max_capacity - (totalRegistrations || 0);
+  const dailySpotsRemaining = dailyLimit - todayCount;
 
   const formConfig = event.form_config || [];
 
@@ -140,10 +169,53 @@ export default async function PublicEventPage({ params, searchParams }: { params
                     We're sorry, but this event has reached its maximum capacity. No further registrations can be accepted at this time.
                   </p>
                 </div>
+              ) : isDailyLimitReached ? (
+                /* Phase-wise: Daily limit reached */
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Clock className="w-10 h-10 text-amber-500" />
+                  </div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-4">Today&apos;s Slots Are Full</h2>
+                  <p className="text-gray-500 mb-6 leading-relaxed max-w-md mx-auto">
+                    This event uses phase-wise registration. Today&apos;s {dailyLimit} registration slots have been filled.
+                  </p>
+                  
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-6 max-w-sm mx-auto space-y-4">
+                    <div className="flex items-center justify-center gap-2 text-amber-800 font-semibold">
+                      <Clock className="w-5 h-5" />
+                      Registration reopens tomorrow
+                    </div>
+                    <p className="text-sm text-amber-700">
+                      Come back after <strong>12:00 AM IST</strong> to register. {spotsRemaining} spots are still available overall.
+                    </p>
+                    <div className="w-full bg-amber-100 rounded-full h-2.5 mt-3">
+                      <div 
+                        className="bg-amber-500 h-2.5 rounded-full transition-all" 
+                        style={{ width: `${Math.min(100, ((totalRegistrations || 0) / event.max_capacity) * 100)}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-xs text-amber-600">
+                      {totalRegistrations || 0} / {event.max_capacity} total registrations
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <>
                   <h2 className="text-2xl font-bold text-gray-900 mb-6">Registration Details</h2>
                   <p className="text-gray-500 mb-8">{event.description}</p>
+
+                  {/* Phase registration info banner */}
+                  {event.phase_registration && (
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 mb-6 flex items-start gap-3">
+                      <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-semibold text-amber-900">Phase-wise Registration Active</p>
+                        <p className="text-amber-700 mt-0.5">
+                          {dailySpotsRemaining} of {dailyLimit} slots remaining today &middot; {spotsRemaining} total spots left
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   
                   <form 
                     action={async (formData) => {

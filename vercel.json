@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-sheets",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "functions": {
+    "src/app/e/[slug]/actions.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  }
+}
