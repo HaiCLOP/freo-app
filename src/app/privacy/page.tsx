@@ -61,14 +61,25 @@ export default function PrivacyPolicy() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">5. Data Security</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">5. Third-Party Integrations (Google Cloud)</h2>
               <p>
-                We implement robust, industry-standard security measures, including Row Level Security (RLS) via Supabase, to protect your personal information. However, no electronic transmission over the internet or information storage technology can be guaranteed to be 100% secure.
+                Our platform utilizes Google Cloud APIs (Google Drive and Google Sheets) to provide enhanced storage and organization features for event creators. 
+              </p>
+              <ul className="list-disc pl-6 mt-4 space-y-2">
+                <li><strong>Data Transfer:</strong> When connected, user-submitted files (such as screenshots) and registration data are transferred directly to the creator's personal Google Drive and Google Sheets.</li>
+                <li><strong>No Liability for Data Loss:</strong> We do not control Google's infrastructure. HaiCLOP Labs strictly assumes zero liability for any data loss, data breaches, unauthorized access, or service outages that occur on Google's servers or as a result of using the Google integration. All responsibility and liability regarding the security and retention of data stored within Google's ecosystem falls entirely upon Google and the individual event creator.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Data Security</h2>
+              <p>
+                We implement robust, industry-standard security measures, including Row Level Security (RLS) via Supabase, to protect your personal information on our direct servers. However, no electronic transmission over the internet or information storage technology can be guaranteed to be 100% secure.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Contact Us</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">7. Contact Us</h2>
               <p>
                 If you have questions or comments about this Privacy Policy, please contact HaiCLOP Labs at: <strong>haicloplabs@gmail.com</strong>.
               </p>

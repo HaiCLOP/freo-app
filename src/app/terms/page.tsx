@@ -60,14 +60,25 @@ export default function TermsOfService() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Modifications and Interruptions</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">6. Third-Party Integrations & Absolute Limitation of Liability</h2>
+              <p>
+                Freo integrates with third-party services, specifically Google Cloud (Google Drive and Google Sheets), to store registration data and files on behalf of event creators. By utilizing these integrations, you explicitly agree to the following conditions without any loopholes or exceptions:
+              </p>
+              <ul className="list-disc pl-6 mt-4 space-y-2">
+                <li><strong>Zero Liability for Data Loss:</strong> HaiCLOP Labs provides the API bridge to Google but does not control their infrastructure. We are <strong>absolutely and entirely exempt from any and all liability</strong> arising from data loss, data corruption, unauthorized data access, API outages, or token expirations related to Google Cloud.</li>
+                <li><strong>Assumption of Risk:</strong> You assume 100% of the risk associated with storing data on third-party servers. Any claims, damages, or legal actions regarding lost event data, missing payments, or deleted spreadsheets must be directed solely at Google or the user responsible. <strong>All blame and liability regarding third-party data loss rests exclusively with Google.</strong></li>
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">7. Modifications and Interruptions</h2>
               <p>
                 We reserve the right to change, modify, or remove the contents of the platform at any time or for any reason at our sole discretion without notice. We will not be liable to you or any third party for any modification, price change, suspension, or discontinuance of the platform.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">7. Contact Information</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">8. Contact Information</h2>
               <p>
                 In order to resolve a complaint regarding the platform or to receive further information regarding use of the platform, please contact us at: <strong>events@haicloplabs.in</strong>.
               </p>
