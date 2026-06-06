@@ -9,7 +9,6 @@ import Link from "next/link";
 import { approveRegistration, rejectRegistration } from "./actions";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/submit-button";
-import Image from "next/image";
 import { getFileUrls } from "@/lib/storage";
 
 export default async function EventRegistrationsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -159,14 +158,9 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                   {/* Screenshot */}
                   <div className="w-32 h-20 relative rounded-xl overflow-hidden border border-[#e5e5ea] bg-[#f5f5f7] flex-shrink-0 shadow-sm group-hover:shadow-md transition-all">
                     {reg.payment_screenshot_url && signedUrlMap[reg.payment_screenshot_url] ? (
-                      <a href={signedUrlMap[reg.payment_screenshot_url]} target="_blank" rel="noopener noreferrer">
-                        <Image 
-                          src={signedUrlMap[reg.payment_screenshot_url]}
-                          alt="Payment Screenshot"
-                          fill
-                          className="object-cover hover:opacity-80 transition-opacity"
-                          unoptimized
-                        />
+                      <a href={signedUrlMap[reg.payment_screenshot_url]} target="_blank" rel="noopener noreferrer" className="w-full h-full flex flex-col items-center justify-center text-[#0066cc] hover:bg-[#0066cc]/5 transition-colors">
+                        <ExternalLink className="w-5 h-5 mb-1" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wider">View</span>
                       </a>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[11px] font-medium text-[#86868b] uppercase tracking-wider">No Image</div>

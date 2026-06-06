@@ -180,24 +180,24 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     }
   }
 
-  // 5. Insert Registration
-  const { error: insertError } = await supabase
-    .from("registrations")
-    .insert({
-      event_id: eventId,
-      full_name,
-      phone,
-      email,
-      herbalife_id,
-      sponsor_name,
-      utr_id,
-      payment_screenshot_url,
-      custom_fields,
-      status: 'pending'
-    });
+  // 5. Insert Registration using Atomic RPC
+  const { error: insertError } = await supabase.rpc('register_for_event', {
+    p_event_id: eventId,
+    p_full_name: full_name,
+    p_phone: phone,
+    p_email: email,
+    p_herbalife_id: herbalife_id,
+    p_sponsor_name: sponsor_name,
+    p_utr_id: utr_id,
+    p_payment_screenshot_url: payment_screenshot_url,
+    p_custom_fields: custom_fields
+  });
 
   if (insertError) {
     console.error("Failed to insert registration", insertError);
+    if (insertError.message?.includes('Event sold out')) {
+      redirect(`/e/${eventSlug}?error=sold_out`);
+    }
     redirect(`/e/${eventSlug}?error=submission_failed`);
   }
 
@@ -210,7 +210,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     if (payment_screenshot_url) {
       try {
         const url = await getFileUrl(event.creator_id, payment_screenshot_url);
-        publicScreenshotUrl = url ? `=HYPERLINK("${url}", IMAGE("${url}"))` : "Image upload pending";
+        publicScreenshotUrl = url ? url : "Image upload pending";
       } catch {
         publicScreenshotUrl = "Image upload pending";
       }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { createEvent } from "../actions";
 
 export default function NewEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [qrFile, setQrFile] = useState<File | null>(null);
   const [capacity, setCapacity] = useState<number>(0);
@@ -47,8 +48,15 @@ export default function NewEventPage() {
       )}
 
       <form 
-        action={async (formData) => {
+        onSubmit={(e) => {
+          if (isSubmittingRef.current) {
+            e.preventDefault();
+            return;
+          }
+          isSubmittingRef.current = true;
           setIsSubmitting(true);
+        }}
+        action={async (formData) => {
           try {
             await createEvent(formData);
           } catch (e: any) {
@@ -57,6 +65,7 @@ export default function NewEventPage() {
               throw e;
             }
             console.error(e);
+            isSubmittingRef.current = false;
             setIsSubmitting(false);
           }
         }} 
