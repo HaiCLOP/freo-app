@@ -12,25 +12,9 @@ export async function connectGoogleAccount() {
     redirect("/login");
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${baseUrl}/api/auth/callback?next=/dashboard/settings`,
-      scopes: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets",
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
-      },
-    },
-  });
-
-  if (error || !data.url) {
-    redirect("/dashboard/settings?error=google_connect_failed");
-  }
-
-  redirect(data.url);
+  // Instead of using Supabase Auth (which treats Google as a login provider),
+  // we redirect to our custom OAuth flow to grab the tokens as API keys.
+  redirect("/api/google/auth");
 }
 
 export async function disconnectGoogleAccount() {

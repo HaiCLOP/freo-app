@@ -215,8 +215,14 @@ export async function appendRowToSheet(
     // Sanitize values to prevent Spreadsheet Formula Injection (CSV Injection)
     // Any value starting with =, +, -, or @ could be interpreted as a formula.
     const sanitizedValues = values.map(val => {
-      if (typeof val === 'string' && /^[=+\-@]/.test(val)) {
-        return "'" + val; // Prefix with single quote to force plain text
+      if (typeof val === 'string') {
+        // Allow explicit IMAGE and HYPERLINK formulas for screenshots
+        if (val.startsWith('=IMAGE(') || val.startsWith('=HYPERLINK(')) {
+          return val;
+        }
+        if (/^[=+\-@]/.test(val)) {
+          return "'" + val; // Prefix with single quote to force plain text
+        }
       }
       return val;
     });

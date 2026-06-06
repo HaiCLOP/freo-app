@@ -209,8 +209,19 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     let publicScreenshotUrl = "No Image";
     if (payment_screenshot_url) {
       try {
-        const url = await getFileUrl(event.creator_id, payment_screenshot_url);
-        publicScreenshotUrl = url ? url : "Image upload pending";
+        let url = await getFileUrl(event.creator_id, payment_screenshot_url);
+        if (url) {
+          // Convert Google Drive view links to raw export links for IMAGE formula
+          if (url.includes("drive.google.com")) {
+            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+              url = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+            }
+          }
+          publicScreenshotUrl = `=IMAGE("${url}")`;
+        } else {
+          publicScreenshotUrl = "Image upload pending";
+        }
       } catch {
         publicScreenshotUrl = "Image upload pending";
       }
