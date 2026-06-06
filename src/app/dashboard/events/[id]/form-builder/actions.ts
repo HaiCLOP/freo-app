@@ -12,6 +12,14 @@ export async function saveFormConfig(eventId: string, config: any[]) {
     throw new Error("Unauthorized");
   }
 
+  // Prevent JSONB storage bloat / DoS
+  if (!Array.isArray(config) || config.length > 50) {
+    return { error: "Form configuration exceeds maximum allowed fields (50)." };
+  }
+  if (JSON.stringify(config).length > 50000) {
+    return { error: "Form configuration payload is too large." };
+  }
+
   const { error } = await supabase
     .from("events")
     .update({ form_config: config })
@@ -40,7 +48,7 @@ export async function getFormConfig(eventId: string) {
     .select("form_config")
     .eq("id", eventId)
     .eq("creator_id", user.id)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error("Failed to get form config:", error);

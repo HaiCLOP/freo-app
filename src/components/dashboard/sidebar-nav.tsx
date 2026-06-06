@@ -42,15 +42,15 @@ export function SidebarNav() {
       <div className="mt-6 mb-1 border-t border-[#2A2B31] mx-4 shrink-0"></div>
 
       <Link
-        href="/dashboard/progress"
+        href="/dashboard/settings"
         className={`flex items-center gap-3 px-4 py-3.5 rounded-[16px] font-medium transition-all shrink-0 ${
-          pathname?.startsWith("/dashboard/progress")
+          pathname?.startsWith("/dashboard/settings")
             ? "bg-[#2A2B31] text-white"
             : "text-[#8E8F94] hover:bg-[#2A2B31]/50 hover:text-white"
         }`}
       >
         <Settings className="w-5 h-5" />
-        Progress
+        Settings
       </Link>
       <Link
         href="#"

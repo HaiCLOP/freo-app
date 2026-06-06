@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
+  const headersList = await headers();
+  const ip = headersList.get("x-forwarded-for") || "unknown";
+  
+  if (ip !== "unknown") {
+    const { allowed } = rateLimit(`verify_endpoint_${ip}`, 10, 60_000); // 10 attempts per minute
+    if (!allowed) {
+      return NextResponse.redirect(new URL("/dashboard/progress?error=rate_limited", request.url));
+    }
+  }
+
   const token = request.nextUrl.searchParams.get("token");
 
   if (!token) {

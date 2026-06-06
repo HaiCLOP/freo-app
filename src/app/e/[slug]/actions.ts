@@ -2,12 +2,50 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { appendRowToSheet } from "@/lib/google-sheets";
+import { uploadFile, getFileUrl } from "@/lib/storage";
 import { Resend } from "resend";
+import { z } from "zod";
+import { headers } from "next/headers";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const registrationSchema = z.object({
+  name: z.string().min(2, "Name is too short").max(100, "Name is too long"),
+  phone: z.string().min(10, "Phone is too short").max(20, "Phone is too long").regex(/^[0-9+\-\s()]+$/, "Invalid phone format"),
+  email: z.string().email("Invalid email format").max(255, "Email is too long"),
+  herbalife_id: z.string().max(50, "Herbalife ID is too long").optional().nullable(),
+  sponsor: z.string().max(100, "Sponsor name is too long").optional().nullable(),
+  utr_id: z.string().min(4, "UTR is too short").max(50, "UTR is too long"),
+});
+
+// Simple in-memory rate limiter (resets on serverless cold starts)
+const rateLimitMap = new Map<string, { count: number; timestamp: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 5;
+
 export async function submitRegistration(eventId: string, eventSlug: string, formData: FormData) {
+  // Rate Limiting Check
+  const headersList = await headers();
+  const ip = headersList.get("x-forwarded-for") || "unknown";
+  
+  if (ip !== "unknown") {
+    const now = Date.now();
+    const windowStart = now - RATE_LIMIT_WINDOW_MS;
+    const ipData = rateLimitMap.get(ip) || { count: 0, timestamp: now };
+    
+    if (ipData.timestamp < windowStart) {
+      ipData.count = 1;
+      ipData.timestamp = now;
+    } else {
+      ipData.count++;
+      if (ipData.count > MAX_REQUESTS_PER_WINDOW) {
+        console.warn(`Rate limit exceeded for IP: ${ip}`);
+        redirect(`/e/${eventSlug}?error=rate_limited`);
+      }
+    }
+    rateLimitMap.set(ip, ipData);
+  }
+
   const supabase = await createClient();
 
   // 1. Get Event Data for sheet ID and creator details
@@ -15,36 +53,89 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     .from("events")
     .select("*, creators(notification_email, name)")
     .eq("id", eventId)
+    .eq("is_active", true)
     .single();
 
   if (!event) throw new Error("Event not found");
 
+  // 1b. Enforce capacity + phase-wise daily limit (server-side guard)
+  const { count: totalRegs } = await supabase
+    .from("registrations")
+    .select("*", { count: 'exact', head: true })
+    .eq("event_id", eventId)
+    .neq("status", "rejected");
+
+  if ((totalRegs || 0) >= event.max_capacity) {
+    redirect(`/e/${eventSlug}?error=sold_out`);
+  }
+
+  if (event.phase_registration) {
+    // Calculate today's start and end boundaries in IST (Asia/Kolkata)
+    const nowStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+    const istNow = new Date(nowStr);
+    
+    // Create Date objects representing 00:00:00 and 23:59:59 in IST
+    const todayStart = new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 0, 0, 0);
+    const todayEnd = new Date(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 23, 59, 59, 999);
+
+    const { count: todayRegs } = await supabase
+      .from("registrations")
+      .select("*", { count: 'exact', head: true })
+      .eq("event_id", eventId)
+      .neq("status", "rejected")
+      .gte("registered_at", todayStart.toISOString())
+      .lte("registered_at", todayEnd.toISOString());
+
+    if ((todayRegs || 0) >= (event.daily_reg_limit || 100)) {
+      redirect(`/e/${eventSlug}?error=daily_limit`);
+    }
+  }
+
   // 2. Extract Core Fields
-  const full_name = formData.get("name") as string;
-  const phone = formData.get("phone") as string;
-  const email = formData.get("email") as string;
-  const herbalife_id = formData.get("herbalife_id") as string || null;
-  const sponsor_name = formData.get("sponsor") as string || null;
-  const utr_id = formData.get("utr_id") as string;
+  const rawData = {
+    name: formData.get("name") as string,
+    phone: formData.get("phone") as string,
+    email: formData.get("email") as string,
+    herbalife_id: formData.get("herbalife_id") as string || null,
+    sponsor: formData.get("sponsor") as string || null,
+    utr_id: formData.get("utr_id") as string,
+  };
+
+  const validationResult = registrationSchema.safeParse(rawData);
+  if (!validationResult.success) {
+    console.error("Validation failed:", validationResult.error.flatten());
+    redirect(`/e/${eventSlug}?error=invalid_data`);
+  }
+
+  const { name: full_name, phone, email, herbalife_id, sponsor: sponsor_name, utr_id } = validationResult.data;
   
-  // 3. Handle File Uploads (Screenshot)
+  // 3. Handle File Uploads → Google Drive or Supabase Storage (auto-detected)
   const screenshot = formData.get("payment_screenshot") as File;
   let payment_screenshot_url = null;
   
   if (screenshot && screenshot.size > 0) {
-    const ext = screenshot.name.split('.').pop();
-    const fileName = `${event.id}/${Date.now()}-payment.${ext}`;
-    
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from("payment-screenshots")
-      .upload(fileName, screenshot);
-      
-    if (uploadError) {
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedImageTypes.includes(screenshot.type)) {
+      redirect(`/e/${eventSlug}?error=invalid_file_type`);
+    }
+
+    const mimeToExt: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif'
+    };
+
+    const ext = mimeToExt[screenshot.type] || 'bin';
+    try {
+      payment_screenshot_url = await uploadFile(
+        event.creator_id, eventSlug, "payment-screenshots",
+        `${Date.now()}-payment.${ext}`, screenshot, false
+      );
+    } catch (uploadError) {
       console.error("Screenshot upload failed", uploadError);
       throw new Error("Failed to upload screenshot");
     }
-    
-    payment_screenshot_url = uploadData.path; // Keep path because it's a private bucket
   }
 
   // 4. Extract Custom Fields
@@ -57,12 +148,30 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     if (field.type === "file") {
       const file = formData.get(field.id) as File;
       if (file && file.size > 0) {
-        // Upload custom file to a public bucket or private (using payment-screenshots for simplicity or create a new one)
-        // Since we don't have a custom-files bucket, we'll put it in payment-screenshots for security
-        const ext = file.name.split('.').pop();
-        const fileName = `${event.id}/${Date.now()}-${field.id}.${ext}`;
-        const { data } = await supabase.storage.from("payment-screenshots").upload(fileName, file);
-        if (data) custom_fields[field.id] = data.path;
+        // Enforce strict MIME types for custom file uploads
+        const allowedTypes: Record<string, string> = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+          'application/pdf': 'pdf'
+        };
+
+        if (!allowedTypes[file.type]) {
+          redirect(`/e/${eventSlug}?error=invalid_file_type`);
+        }
+
+        // Force extension based on MIME type to prevent extension spoofing
+        const ext = allowedTypes[file.type];
+        
+        try {
+          const uploadedRef = await uploadFile(
+            event.creator_id, eventSlug, "custom-files",
+            `${Date.now()}-${field.id}.${ext}`, file, false
+          );
+          custom_fields[field.id] = uploadedRef;
+        } catch {
+          console.error(`Failed to upload custom field file: ${field.id}`);
+        }
       }
     } else if (field.type === "checkbox") {
       custom_fields[field.id] = formData.get(field.id) === "on";
@@ -92,20 +201,19 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     redirect(`/e/${eventSlug}?error=submission_failed`);
   }
 
-  // 6. Append to Google Sheet
+  // 6. Write to Google Sheet directly (with queue fallback)
   if (event.google_sheet_id) {
     const registeredAt = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     
-    // Generate a 7-day signed URL for the spreadsheet so the creator can click and view it
+    // Generate a signed URL for the spreadsheet thumbnail
     let publicScreenshotUrl = "No Image";
     if (payment_screenshot_url) {
-      const { data: signedData } = await supabase.storage
-        .from("payment-screenshots")
-        .createSignedUrl(payment_screenshot_url, 60 * 60 * 24 * 7); // 7 days
-      
-      const url = signedData?.signedUrl || payment_screenshot_url;
-      // Use HYPERLINK and IMAGE formula so Google Sheets displays it as a thumbnail and makes it clickable
-      publicScreenshotUrl = `=HYPERLINK("${url}", IMAGE("${url}"))`; 
+      try {
+        const url = await getFileUrl(event.creator_id, payment_screenshot_url);
+        publicScreenshotUrl = url ? `=HYPERLINK("${url}", IMAGE("${url}"))` : "Image upload pending";
+      } catch {
+        publicScreenshotUrl = "Image upload pending";
+      }
     }
 
     const sheetRow = [
@@ -120,15 +228,40 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       "", // Approved At is empty for now
       publicScreenshotUrl
     ];
-    await appendRowToSheet(event.google_sheet_id, sheetRow);
+
+    // Try direct write first
+    try {
+      const { appendRowToSheet } = await import("@/lib/google-sheets");
+      await appendRowToSheet(event.creator_id, event.google_sheet_id, sheetRow);
+    } catch (sheetError) {
+      console.error("Direct sheet write failed, queuing:", sheetError);
+      // Fallback: queue for cron processing
+      await supabase.from("sheet_queue").insert({
+        sheet_id: event.google_sheet_id,
+        creator_id: event.creator_id,
+        row_data: sheetRow,
+        status: "pending",
+      });
+    }
   }
 
   // 7. Send "Registration Received" Email to Attendee
   try {
+    // Sanitize user inputs to prevent HTML injection in emails
+    const escapeHTML = (str: string) => str.replace(/[&<>'"]/g, 
+      tag => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;'
+        }[tag] || tag)
+    );
+
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
       to: email,
-      subject: `Registration Received - ${event.name}`,
+      subject: `Registration Received - ${escapeHTML(event.name)}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -156,8 +289,8 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
               <h1>Registration Received!</h1>
             </div>
             <div class="content">
-              <p>Hi <strong>${full_name}</strong>,</p>
-              <p>We've successfully received your registration and payment details for <strong>${event.name}</strong>.</p>
+              <p>Hi <strong>${escapeHTML(full_name)}</strong>,</p>
+              <p>We've successfully received your registration and payment details for <strong>${escapeHTML(event.name)}</strong>.</p>
               
               <div class="status-box">
                 <p class="status-text">Pending Approval</p>

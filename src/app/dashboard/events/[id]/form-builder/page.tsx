@@ -95,9 +95,23 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
   if (!isMounted) return null; // Avoid hydration mismatch on DND
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <>
+      {/* Full-page loading overlay */}
+      {isSaving && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4 max-w-sm mx-4">
+            <Loader2 className="w-8 h-8 animate-spin text-[#1d1d1f]" />
+            <div className="text-center">
+              <p className="font-semibold text-[#1d1d1f] text-lg">Saving Form...</p>
+              <p className="text-sm text-[#86868b] mt-1">Please wait while your configuration is saved.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`max-w-4xl mx-auto space-y-8 ${isSaving ? 'pointer-events-none opacity-60' : ''}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
           <Link href={`/dashboard/events`}>
             <Button variant="ghost" size="icon" className="rounded-full">
               <ArrowLeft className="w-5 h-5" />
@@ -241,6 +255,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
           )}
         </Droppable>
       </DragDropContext>
-    </div>
+      </div>
+    </>
   );
 }

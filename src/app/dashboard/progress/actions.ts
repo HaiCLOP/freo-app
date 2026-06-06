@@ -4,10 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Resend } from "resend";
+import { headers } from "next/headers";
+import { rateLimit } from "@/lib/rate-limit";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendVerificationEmail(formData: FormData) {
+  const headersList = await headers();
+  const ip = headersList.get("x-forwarded-for") || "unknown";
+  
+  if (ip !== "unknown") {
+    const { allowed } = rateLimit(`email_verify_${ip}`, 3, 60_000); // Max 3 emails per minute
+    if (!allowed) {
+      redirect("/dashboard/progress?error=rate_limited");
+    }
+  }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

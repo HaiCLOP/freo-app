@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
 import { updateRowStatusInSheet } from "@/lib/google-sheets";
+import crypto from "crypto";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -23,8 +24,8 @@ export async function approveRegistration(registrationId: string, eventId: strin
   if (event?.creator_id !== user.id) throw new Error("Unauthorized");
 
   const now = new Date().toISOString();
-  // Generate a unique ticket code
-  const ticketCode = `TKT-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+  // Generate a cryptographically secure ticket code
+  const ticketCode = `TKT-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
 
   // Update status and ticket_code
   const { data: reg, error } = await supabase
@@ -35,6 +36,7 @@ export async function approveRegistration(registrationId: string, eventId: strin
       ticket_code: ticketCode
     })
     .eq("id", registrationId)
+    .eq("event_id", eventId)
     .select("*")
     .single();
 
@@ -47,6 +49,7 @@ export async function approveRegistration(registrationId: string, eventId: strin
   if (event.google_sheet_id) {
     const formattedApprovedAt = new Date(now).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     await updateRowStatusInSheet(
+      user.id,
       event.google_sheet_id,
       reg.utr_id || "",
       "Approved",
@@ -56,24 +59,22 @@ export async function approveRegistration(registrationId: string, eventId: strin
     );
   }
 
-  // Generate QR Code data holding user info for the scanner phone app
-  const qrData = JSON.stringify({
-    ticketCode: ticketCode,
-    name: reg.full_name,
-    email: reg.email,
-    phone: reg.phone,
-    herbalifeId: reg.herbalife_id || "",
-    sponsorName: reg.sponsor_name || "",
-    eventName: event.name
-  });
+  // The QR code now ONLY contains the cryptographically secure ticket code.
+  // PII is no longer embedded in the QR image nor sent to the third-party generator.
+  const qrData = ticketCode;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}&color=DDFE55&bgcolor=1d1d1f`;
+
+  // Sanitize user inputs to prevent HTML injection in emails
+  const escapeHTML = (str: string) => str.replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
 
   // Send Approval Email with Digital Ticket
   try {
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
       to: reg.email,
-      subject: `Ticket Approved! - ${event.name}`,
+      subject: `Ticket Approved! - ${escapeHTML(event.name)}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -101,10 +102,10 @@ export async function approveRegistration(registrationId: string, eventId: strin
               <h1>Ticket Approved!</h1>
             </div>
             <div class="content">
-              <p>You're all set for <strong>${event.name}</strong></p>
+              <p>You're all set for <strong>${escapeHTML(event.name)}</strong></p>
               
               <div class="qr-box">
-                <p style="margin-top: 0;"><strong>${reg.full_name}</strong></p>
+                <p style="margin-top: 0;"><strong>${escapeHTML(reg.full_name)}</strong></p>
                 <img src="${qrUrl}" alt="Your Digital Ticket QR Code" class="qr-image" />
                 <p style="margin-bottom: 0; font-size: 14px; color: #ddfe55;">Present this QR code at the check-in desk</p>
               </div>
@@ -144,6 +145,7 @@ export async function rejectRegistration(registrationId: string, eventId: string
     .from("registrations")
     .update({ status: "rejected" })
     .eq("id", registrationId)
+    .eq("event_id", eventId)
     .select("*")
     .single();
 
@@ -155,6 +157,7 @@ export async function rejectRegistration(registrationId: string, eventId: string
   // Update Google Sheet if enabled
   if (event.google_sheet_id) {
     await updateRowStatusInSheet(
+      user.id,
       event.google_sheet_id,
       reg.utr_id || "",
       "Rejected",
@@ -164,12 +167,17 @@ export async function rejectRegistration(registrationId: string, eventId: string
     );
   }
 
+  // Sanitize user inputs to prevent HTML injection in emails
+  const escapeHTML = (str: string) => str.replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
+
   // Send Rejection Email
   try {
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
       to: reg.email,
-      subject: `Registration Update - ${event.name}`,
+      subject: `Registration Update - ${escapeHTML(event.name)}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -197,8 +205,8 @@ export async function rejectRegistration(registrationId: string, eventId: string
               <h1>Registration Update</h1>
             </div>
             <div class="content">
-              <p>Hi <strong>${reg.full_name}</strong>,</p>
-              <p>Unfortunately, your registration for <strong>${event.name}</strong> could not be approved at this time.</p>
+              <p>Hi <strong>${escapeHTML(reg.full_name)}</strong>,</p>
+              <p>Unfortunately, your registration for <strong>${escapeHTML(event.name)}</strong> could not be approved at this time.</p>
               
               <div class="status-box">
                 <p class="status-text">Registration Rejected</p>

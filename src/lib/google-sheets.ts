@@ -1,200 +1,245 @@
 import { google } from "googleapis";
+import { createClient } from "@/lib/supabase/server";
 
-export async function initializeGoogleSheet(spreadsheetId: string) {
-  const credentialsBase64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!credentialsBase64) return;
+/**
+ * Google Sheets + Drive utility using the creator's OAuth tokens.
+ * 
+ * When a creator connects their Google account in Settings,
+ * this utility can:
+ *   - Auto-create a Google Sheet in their Drive
+ *   - Write registration data directly to their Sheet
+ *   - Update statuses in their Sheet
+ * 
+ * Falls back to service account if OAuth is not available.
+ */
 
-  let credentialsJson;
-  try {
-    credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
-  } catch (e) {
-    console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY. Is it valid base64 JSON?");
-    return;
+// ---------- Auth Helpers ----------
+
+/**
+ * Get an authenticated Google client using the creator's OAuth tokens.
+ * Falls back to service account if no OAuth tokens exist.
+ */
+async function getGoogleAuth(creatorId: string) {
+  const supabase = await createClient();
+  const { data: creator } = await supabase
+    .from("creators")
+    .select("google_access_token, google_refresh_token")
+    .eq("id", creatorId)
+    .single();
+
+  // If creator has connected Google via OAuth, use their token
+  if (creator?.google_access_token) {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+
+    oauth2Client.setCredentials({
+      access_token: creator.google_access_token,
+      refresh_token: creator.google_refresh_token,
+    });
+
+    // Auto-refresh: save new tokens when refreshed
+    oauth2Client.on("tokens", async (tokens) => {
+      if (tokens.access_token) {
+        const sb = await createClient();
+        await sb
+          .from("creators")
+          .update({
+            google_access_token: tokens.access_token,
+            google_refresh_token: tokens.refresh_token || creator.google_refresh_token,
+            google_token_updated_at: new Date().toISOString(),
+          })
+          .eq("id", creatorId);
+      }
+    });
+
+    return { auth: oauth2Client, isOAuth: true };
   }
-  
+
+  // Fallback: use service account
+  const credentialsBase64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!credentialsBase64) {
+    throw new Error("No Google credentials available. Connect your Google account in Settings.");
+  }
+
+  const credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
+
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: credentialsJson.client_email,
       private_key: credentialsJson.private_key,
     },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file",
+    ],
   });
 
-  const sheets = google.sheets({ version: "v4", auth });
-
-  try {
-    // 1. Get the first sheet's ID and name
-    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId });
-    const firstSheet = sheetInfo.data.sheets?.[0];
-    if (!firstSheet) return;
-    
-    const sheetId = firstSheet.properties?.sheetId;
-    const sheetName = firstSheet.properties?.title;
-
-    // 2. Add headers if we assume it's blank (row 1)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!A1:J1`,
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [
-          [
-            "Name",
-            "Phone",
-            "Email",
-            "Herbalife ID",
-            "Sponsor",
-            "UTR ID",
-            "Status",
-            "Registered At",
-            "Approved At",
-            "Payment Screenshot URL"
-          ],
-        ],
-      },
-    });
-
-    // 3. Format header row and rename sheet to "Registrations"
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [
-          {
-            updateSheetProperties: {
-              properties: {
-                sheetId: sheetId,
-                title: "Registrations",
-                gridProperties: {
-                  frozenRowCount: 1,
-                },
-              },
-              fields: "title,gridProperties.frozenRowCount",
-            },
-          },
-          {
-            repeatCell: {
-              range: {
-                sheetId: sheetId,
-                startRowIndex: 0,
-                endRowIndex: 1,
-              },
-              cell: {
-                userEnteredFormat: {
-                  backgroundColor: { red: 0.9, green: 0.9, blue: 0.9 },
-                  textFormat: { bold: true },
-                },
-              },
-              fields: "userEnteredFormat(backgroundColor,textFormat)",
-            },
-          },
-          // Set row height for rows 1 to 1000 to 60px
-          {
-            updateDimensionProperties: {
-              range: {
-                sheetId: sheetId,
-                dimension: "ROWS",
-                startIndex: 1,
-                endIndex: 1000,
-              },
-              properties: {
-                pixelSize: 60,
-              },
-              fields: "pixelSize",
-            },
-          },
-          // Set column width for Payment Screenshot URL (column 9, index 9) to 120px
-          {
-            updateDimensionProperties: {
-              range: {
-                sheetId: sheetId,
-                dimension: "COLUMNS",
-                startIndex: 9,
-                endIndex: 10,
-              },
-              properties: {
-                pixelSize: 120,
-              },
-              fields: "pixelSize",
-            },
-          },
-        ],
-      },
-    });
-  } catch (error) {
-    console.error("Failed to initialize Google Sheet:", error);
-  }
+  return { auth, isOAuth: false };
 }
 
-export async function appendRowToSheet(spreadsheetId: string, values: any[]) {
-  if (!spreadsheetId) return;
-  const credentialsBase64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!credentialsBase64) return;
+// ---------- Sheet Auto-Creation ----------
 
-  let credentialsJson;
-  try {
-    credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
-  } catch (e) {
-    console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY. Is it valid base64 JSON?");
-    return;
-  }
+/**
+ * Auto-create a Google Sheet for an event in the creator's Drive.
+ * Returns the spreadsheet ID.
+ */
+export async function autoCreateSheet(
+  creatorId: string,
+  eventName: string,
+  driveFolderId?: string
+): Promise<string> {
+  const { auth } = await getGoogleAuth(creatorId);
+  const sheets = google.sheets({ version: "v4", auth });
+  const drive = google.drive({ version: "v3", auth });
 
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: credentialsJson.client_email,
-      private_key: credentialsJson.private_key,
+  // 1. Create the spreadsheet
+  const spreadsheet = await sheets.spreadsheets.create({
+    requestBody: {
+      properties: {
+        title: `${eventName} — Registrations`,
+      },
+      sheets: [
+        {
+          properties: {
+            title: "Registrations",
+            gridProperties: { frozenRowCount: 1 },
+          },
+        },
+      ],
     },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 
-  const sheets = google.sheets({ version: "v4", auth });
+  const spreadsheetId = spreadsheet.data.spreadsheetId!;
+
+  // 2. Add headers
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: "Registrations!A1:J1",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [
+        [
+          "Name",
+          "Phone",
+          "Email",
+          "Herbalife ID",
+          "Sponsor",
+          "UTR ID",
+          "Status",
+          "Registered At",
+          "Approved At",
+          "Payment Screenshot URL",
+        ],
+      ],
+    },
+  });
+
+  // 3. Format headers
+  const sheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 },
+                textFormat: { bold: true },
+              },
+            },
+            fields: "userEnteredFormat(backgroundColor,textFormat)",
+          },
+        },
+        {
+          updateDimensionProperties: {
+            range: { sheetId, dimension: "ROWS", startIndex: 1, endIndex: 1000 },
+            properties: { pixelSize: 60 },
+            fields: "pixelSize",
+          },
+        },
+        {
+          autoResizeDimensions: {
+            dimensions: { sheetId, dimension: "COLUMNS", startIndex: 0, endIndex: 10 },
+          },
+        },
+      ],
+    },
+  });
+
+  // 4. Move to Freo Events folder if creator has one
+  if (driveFolderId) {
+    try {
+      // Get current parent
+      const file = await drive.files.get({
+        fileId: spreadsheetId,
+        fields: "parents",
+      });
+
+      const previousParents = file.data.parents?.join(",") || "";
+
+      await drive.files.update({
+        fileId: spreadsheetId,
+        addParents: driveFolderId,
+        removeParents: previousParents,
+        fields: "id, parents",
+      });
+    } catch (err) {
+      console.error("Failed to move sheet to Freo folder:", err);
+      // Non-critical — sheet still works, just not in the folder
+    }
+  }
+
+  return spreadsheetId;
+}
+
+// ---------- Sheet Operations ----------
+
+/**
+ * Append a registration row to a Google Sheet.
+ */
+export async function appendRowToSheet(
+  creatorId: string,
+  spreadsheetId: string,
+  values: any[]
+) {
+  if (!spreadsheetId) return;
 
   try {
-    // Check if headers exist (checking A1)
-    const getRes = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "A1:A1",
+    const { auth } = await getGoogleAuth(creatorId);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    // Sanitize values to prevent Spreadsheet Formula Injection (CSV Injection)
+    // Any value starting with =, +, -, or @ could be interpreted as a formula.
+    const sanitizedValues = values.map(val => {
+      if (typeof val === 'string' && /^[=+\-@]/.test(val)) {
+        return "'" + val; // Prefix with single quote to force plain text
+      }
+      return val;
     });
-
-    const hasHeaders = getRes.data.values && getRes.data.values.length > 0 && getRes.data.values[0][0];
-
-    if (!hasHeaders) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: "A1:J1",
-        valueInputOption: "USER_ENTERED",
-        requestBody: {
-          values: [
-            [
-              "Name",
-              "Phone",
-              "Email",
-              "Herbalife ID",
-              "Sponsor",
-              "UTR ID",
-              "Status",
-              "Registered At",
-              "Approved At",
-              "Payment Screenshot URL"
-            ],
-          ],
-        },
-      });
-    }
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "A:J",
+      range: "Registrations!A:J",
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [values],
+        values: [sanitizedValues],
       },
     });
   } catch (error) {
     console.error("Failed to append row to Google Sheet:", error);
+    throw error;
   }
 }
 
+/**
+ * Update the status of a registration in the Sheet.
+ */
 export async function updateRowStatusInSheet(
+  creatorId: string,
   spreadsheetId: string,
   utrId: string,
   status: string,
@@ -203,39 +248,22 @@ export async function updateRowStatusInSheet(
   name?: string
 ) {
   if (!spreadsheetId) return;
-  const credentialsBase64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!credentialsBase64) return;
-
-  let credentialsJson;
-  try {
-    credentialsJson = JSON.parse(Buffer.from(credentialsBase64, "base64").toString("utf-8"));
-  } catch (e) {
-    console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY. Is it valid base64 JSON?");
-    return;
-  }
-
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: credentialsJson.client_email,
-      private_key: credentialsJson.private_key,
-    },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  const sheets = google.sheets({ version: "v4", auth });
 
   try {
+    const { auth } = await getGoogleAuth(creatorId);
+    const sheets = google.sheets({ version: "v4", auth });
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "A:J",
+      range: "Registrations!A:J",
     });
 
     const rows = response.data.values;
     if (!rows || rows.length === 0) return;
 
-    // Find the row matching UTR ID or fallback to Email / Name
+    // Find the row matching UTR ID or fallback to Email/Name
     const rowIndex = rows.findIndex((row, idx) => {
-      if (idx === 0) return false;
+      if (idx === 0) return false; // skip header
       const sheetUtr = row[5]?.toString().trim().toLowerCase();
       const targetUtr = utrId?.toString().trim().toLowerCase();
       const sheetEmail = row[2]?.toString().trim().toLowerCase();
@@ -243,43 +271,33 @@ export async function updateRowStatusInSheet(
       const sheetName = row[0]?.toString().trim().toLowerCase();
       const targetName = name?.toString().trim().toLowerCase();
 
-      // Match by UTR if both are present
       if (targetUtr && sheetUtr === targetUtr) return true;
-      // Fallback: match by email and name
       if (targetEmail && sheetEmail === targetEmail) {
         if (!targetName || sheetName === targetName) return true;
       }
       return false;
     });
-    
+
     if (rowIndex === -1) {
-      console.warn(`Row with UTR ID ${utrId} / Email ${email} not found in Google Sheet`);
+      console.warn(`Row with UTR ID ${utrId} / Email ${email} not found`);
       return;
     }
 
-    // Row number is 1-indexed (rowIndex + 1)
     const rowNum = rowIndex + 1;
 
-    // Update Status (Column G)
-    await sheets.spreadsheets.values.update({
+    // Update Status (Column G) and Approved At (Column I)
+    await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId,
-      range: `G${rowNum}`,
-      valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [[status]],
-      },
-    });
-
-    // Update Approved At (Column I)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `I${rowNum}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[approvedAt || ""]],
+        valueInputOption: "USER_ENTERED",
+        data: [
+          { range: `Registrations!G${rowNum}`, values: [[status]] },
+          { range: `Registrations!I${rowNum}`, values: [[approvedAt || ""]] },
+        ],
       },
     });
   } catch (error) {
-    console.error("Failed to update status in Google Sheet:", error);
+    console.error("Failed to update Google Sheet row:", error);
+    throw error;
   }
 }

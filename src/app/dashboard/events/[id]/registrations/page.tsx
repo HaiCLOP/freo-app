@@ -10,6 +10,7 @@ import { approveRegistration, rejectRegistration } from "./actions";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/submit-button";
 import Image from "next/image";
+import { getFileUrls } from "@/lib/storage";
 
 export default async function EventRegistrationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await params;
@@ -39,7 +40,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
     .eq("event_id", eventId)
     .order("registered_at", { ascending: false });
 
-  // Generate signed URLs in batch for all screenshots
+  // Generate viewable URLs for all screenshots (Google Drive or Supabase Storage)
   const pathsToSign = registrations
     ?.map(r => r.payment_screenshot_url)
     .filter(Boolean) as string[] || [];
@@ -47,17 +48,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
   let signedUrlMap: Record<string, string> = {};
   
   if (pathsToSign.length > 0) {
-    const { data: signedUrls } = await supabase.storage
-      .from("payment-screenshots")
-      .createSignedUrls(pathsToSign, 60 * 60); // 1 hour expiry
-      
-    if (signedUrls) {
-      signedUrls.forEach(su => {
-        if (su.path && su.signedUrl) {
-          signedUrlMap[su.path] = su.signedUrl;
-        }
-      });
-    }
+    signedUrlMap = await getFileUrls(user.id, pathsToSign);
   }
 
   const totalRegistrations = registrations?.filter(r => r.status !== 'rejected').length || 0;
