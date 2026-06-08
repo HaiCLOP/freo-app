@@ -36,6 +36,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // OAuth error — redirect to login with error
-  return NextResponse.redirect(`${origin}/login?error=Could not authenticate with Google`);
+  // Authentication error — redirect to login with error
+  return NextResponse.redirect(`${origin}/login?error=Authentication failed. The link may have expired or is invalid.`);
 }

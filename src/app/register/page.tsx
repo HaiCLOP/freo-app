@@ -1,20 +1,20 @@
-import { login } from "./actions";
+import { register } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Mail, ArrowRight } from "lucide-react";
+import { Lock, Mail, ArrowRight, UserPlus } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'Login | Freo',
+  title: 'Register | Freo',
 };
 
-export default async function LoginPage({
+export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; message?: string }>;
 }) {
   const resolvedParams = await searchParams;
 
@@ -30,10 +30,10 @@ export default async function LoginPage({
             <span className="text-4xl font-bold tracking-tight text-[#1B1C20] font-[family-name:var(--font-fredoka)]">Freo</span>
           </div>
           <h1 className="text-5xl font-bold leading-tight mb-6 mt-20">
-            Event registration,<br />reimagined.
+            Start managing<br />events today.
           </h1>
           <p className="text-[#1B1C20]/80 text-lg max-w-md leading-relaxed font-medium">
-            The premium platform for managing your paid events. Collect registrations, verify payments, and issue digital tickets effortlessly.
+            Join the premium platform for managing your paid events. Create an account to start collecting registrations and verifying payments.
           </p>
         </div>
 
@@ -46,7 +46,7 @@ export default async function LoginPage({
         </div>
       </div>
 
-      {/* Right side - Login Form */}
+      {/* Right side - Register Form */}
       <div className="flex-1 flex flex-col justify-center px-4 sm:px-12 lg:px-24 xl:px-32 bg-[#1B1C20]">
         <div className="w-full max-w-[420px] mx-auto">
           {/* Mobile logo */}
@@ -56,16 +56,23 @@ export default async function LoginPage({
           </div>
 
           <div className="mb-10">
-            <h2 className="text-3xl font-bold tracking-tight text-white mb-2">Welcome back</h2>
-            <p className="text-gray-400">Sign in to your creator dashboard to manage events.</p>
+            <h2 className="text-3xl font-bold tracking-tight text-white mb-2">Create an account</h2>
+            <p className="text-gray-400">Sign up to get started as a creator.</p>
           </div>
 
           <div className="bg-[#2A2B31] border border-[#3A3B41] rounded-2xl p-8 subtle-shadow">
-            <form action={login} className="space-y-5">
+            <form action={register} className="space-y-5">
               {resolvedParams.error && (
                 <div className="bg-red-500/10 text-red-400 text-sm p-4 rounded-xl border border-red-500/20 flex items-center gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"></div>
                   {resolvedParams.error}
+                </div>
+              )}
+              
+              {resolvedParams.message && (
+                <div className="bg-green-500/10 text-green-400 text-sm p-4 rounded-xl border border-green-500/20 flex items-center gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0"></div>
+                  {resolvedParams.message}
                 </div>
               )}
               
@@ -96,25 +103,27 @@ export default async function LoginPage({
                     type="password"
                     placeholder="••••••••"
                     required
+                    minLength={6}
                     className="pl-10 py-6 bg-[#1B1C20] border-[#3A3B41] text-white focus-visible:ring-[#DDFE55]/20 focus-visible:border-[#DDFE55] transition-all rounded-xl"
                   />
                 </div>
+                <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters long.</p>
               </div>
 
               <SubmitButton
                 className="w-full py-6 text-base font-bold rounded-xl bg-[#DDFE55] hover:bg-[#c9eb44] transition-all duration-300 text-[#1B1C20] shadow-md hover:shadow-[#DDFE55]/25 mt-4 group"
-                pendingText="Signing In..."
+                pendingText="Signing Up..."
               >
-                Sign In
-                <ArrowRight className="w-4 h-4 ml-2 opacity-70 group-hover:translate-x-1 transition-transform" />
+                Sign Up
+                <UserPlus className="w-4 h-4 ml-2 opacity-70 group-hover:scale-110 transition-transform" />
               </SubmitButton>
             </form>
             
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-400">
-                Don't have an account?{" "}
-                <Link href="/register" className="text-[#DDFE55] hover:underline font-medium">
-                  Sign up
+                Already have an account?{" "}
+                <Link href="/login" className="text-[#DDFE55] hover:underline font-medium">
+                  Sign in
                 </Link>
               </p>
             </div>
