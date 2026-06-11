@@ -20,6 +20,7 @@ export function TopNav() {
     { href: "/dashboard/activity", label: "Activity" },
     { href: "/dashboard/workload", label: "Workload" },
     { href: "/dashboard/progress", label: "Progress" },
+    { href: "/dashboard/analytics", label: "Analytics" },
   ];
 
   return (

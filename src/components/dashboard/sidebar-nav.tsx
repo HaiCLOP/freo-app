@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, CalendarDays, Users, Settings, HelpCircle } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Users, Settings, HelpCircle, BarChart3 } from "lucide-react";
 
 export function SidebarNav() {
   const pathname = usePathname();
@@ -11,6 +11,7 @@ export function SidebarNav() {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/dashboard/events", label: "Events", icon: CalendarDays },
     { href: "/dashboard/workload", label: "Workload", icon: Users },
+    { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   ];
 
   return (
