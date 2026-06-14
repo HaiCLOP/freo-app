@@ -124,8 +124,6 @@ export async function autoCreateSheet(
           "Name",
           "Phone",
           "Email",
-          "Herbalife ID",
-          "Sponsor",
           "UTR ID",
           "Status",
           "Registered At",

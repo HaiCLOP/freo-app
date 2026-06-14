@@ -20,11 +20,15 @@ export default async function AnalyticsPage() {
   }
 
   // Fetch all events for this creator
-  const { data: events } = await supabase
+  const { data: events, error: eventsError } = await supabase
     .from("events")
-    .select("id, name, slug, date, price, capacity, created_at")
+    .select("id, name, slug, date, price, max_capacity, created_at")
     .eq("creator_id", user.id)
     .order("created_at", { ascending: false });
+
+  if (eventsError) {
+    console.error("Analytics: Failed to fetch events:", eventsError);
+  }
 
   if (!events || events.length === 0) {
     return (
@@ -43,10 +47,14 @@ export default async function AnalyticsPage() {
   const eventIds = events.map((e) => e.id);
 
   // Fetch ALL registrations for this creator's events
-  const { data: registrations } = await supabase
+  const { data: registrations, error: regsError } = await supabase
     .from("registrations")
-    .select("id, status, event_id, registered_at, checked_in")
+    .select("id, status, event_id, registered_at, checked_in_at")
     .in("event_id", eventIds);
+
+  if (regsError) {
+    console.error("Analytics: Failed to fetch registrations:", regsError);
+  }
 
   const regs = registrations || [];
 
@@ -57,7 +65,7 @@ export default async function AnalyticsPage() {
   const approvedCount = regs.filter((r) => r.status === "approved").length;
   const rejectedCount = regs.filter((r) => r.status === "rejected").length;
   const pendingCount = regs.filter((r) => r.status === "pending").length;
-  const checkedInCount = regs.filter((r) => r.checked_in === true).length;
+  const checkedInCount = regs.filter((r) => r.checked_in_at != null).length;
 
   const eventPriceMap: Record<string, number> = {};
   events.forEach((e) => {
@@ -110,7 +118,7 @@ export default async function AnalyticsPage() {
   const perEvent = events.map((e) => {
     const eventRegs = regs.filter((r) => r.event_id === e.id);
     const approved = eventRegs.filter((r) => r.status === "approved").length;
-    const checkedIn = eventRegs.filter((r) => r.checked_in === true).length;
+    const checkedIn = eventRegs.filter((r) => r.checked_in_at != null).length;
     const revenue = approved * (e.price || 0);
     return {
       id: e.id,
@@ -121,11 +129,11 @@ export default async function AnalyticsPage() {
       pending: eventRegs.filter((r) => r.status === "pending").length,
       rejected: eventRegs.filter((r) => r.status === "rejected").length,
       checkedIn,
-      capacity: e.capacity || 0,
+      capacity: e.max_capacity || 0,
       revenue,
       fillRate:
-        e.capacity && e.capacity > 0
-          ? Math.round((eventRegs.length / e.capacity) * 100)
+        e.max_capacity && e.max_capacity > 0
+          ? Math.round((eventRegs.length / e.max_capacity) * 100)
           : null,
     };
   });

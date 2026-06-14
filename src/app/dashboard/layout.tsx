@@ -99,8 +99,7 @@ export default async function DashboardLayout({
           <LogoutButton signOutAction={handleSignOut} isMobile={true} />
         </header>
 
-        {/* Desktop Top Header Bar */}
-        <TopNav />
+
 
         <div className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full overflow-y-auto">
           {children}

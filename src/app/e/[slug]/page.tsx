@@ -15,6 +15,7 @@ import { submitRegistration } from "./actions";
 import Image from "next/image";
 import Link from "next/link";
 import { Metadata } from "next";
+import DynamicFormClient from "./DynamicFormClient";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const resolvedParams = await params;
@@ -126,6 +127,10 @@ export default async function PublicEventPage({ params, searchParams }: { params
   const dailySpotsRemaining = dailyLimit - todayCount;
 
   const formConfig = event.form_config || [];
+  const formSettings = event.form_settings || {};
+  const isClosed = formSettings.isClosed === true;
+  const isWaitlistMode = isSoldOut && formSettings.waitlistEnabled === true;
+  const showSoldOut = isSoldOut && !isWaitlistMode;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -157,9 +162,19 @@ export default async function PublicEventPage({ params, searchParams }: { params
              </div>
           )}
 
-          <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden">
+          <Card className={`border-none shadow-xl shadow-gray-200/50 overflow-hidden ${isClosed ? 'rounded-lg border-t-8 border-t-red-600' : 'rounded-3xl'}`}>
             <div className="bg-white p-6 md:p-8">
-              {isSoldOut ? (
+              {isClosed ? (
+                <div className="text-left py-4">
+                  <h2 className="text-3xl font-normal text-gray-900 mb-6 uppercase">{event.name}</h2>
+                  <p className="text-gray-800 mb-2 text-sm leading-relaxed">
+                    {formSettings.closedMessage || `The form ${event.name} is no longer accepting responses.`}
+                  </p>
+                  <p className="text-sm text-gray-800">
+                    Try contacting the owner of the form if you think this is a mistake.
+                  </p>
+                </div>
+              ) : showSoldOut ? (
                 <div className="text-center py-12">
                   <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <AlertCircle className="w-10 h-10 text-gray-400" />
@@ -202,10 +217,19 @@ export default async function PublicEventPage({ params, searchParams }: { params
               ) : (
                 <>
                   <h2 className="text-2xl font-bold text-gray-900 mb-6">Registration Details</h2>
+                  {isWaitlistMode && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-xl mb-6 flex items-start gap-3">
+                      <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold">Event is currently full</p>
+                        <p className="text-sm mt-1">You can still join the waitlist. We will notify you if a spot opens up.</p>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-gray-500 mb-8">{event.description}</p>
 
                   {/* Phase registration info banner */}
-                  {event.phase_registration && (
+                  {event.phase_registration && !isWaitlistMode && (
                     <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 mb-6 flex items-start gap-3">
                       <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                       <div className="text-sm">
@@ -218,95 +242,15 @@ export default async function PublicEventPage({ params, searchParams }: { params
                   )}
                   
                   <form 
+                    id="registration-form"
                     action={async (formData) => {
                       "use server";
                       await submitRegistration(event.id, event.slug, formData);
                     }} 
                     className="space-y-6"
                   >
-                    {/* Dynamic Fields */}
-                    {formConfig.map((field: any) => (
-                      <div key={field.id} className="space-y-2">
-                        <Label htmlFor={field.id} className="text-gray-700 font-medium">
-                          {field.label} {field.required && <span className="text-red-500">*</span>}
-                        </Label>
-                        
-                        {field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "number" ? (
-                          <Input 
-                            id={field.id} 
-                            name={field.id} 
-                            type={field.type === "phone" ? "tel" : field.type} 
-                            placeholder={field.placeholder} 
-                            required={field.required} 
-                            className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6"
-                          />
-                        ) : field.type === "dropdown" ? (
-                          <Select name={field.id} required={field.required}>
-                            <SelectTrigger className="rounded-xl bg-gray-50/50 py-6">
-                              <SelectValue placeholder="Select an option" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {field.options?.split(',').map((opt: string) => (
-                                <SelectItem key={opt.trim()} value={opt.trim()}>{opt.trim()}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : field.type === "checkbox" ? (
-                          <div className="flex items-center space-x-3 bg-gray-50/50 p-4 rounded-xl border border-input">
-                            <Switch id={field.id} name={field.id} required={field.required} />
-                            <Label htmlFor={field.id} className="text-sm font-normal text-gray-600 cursor-pointer">{field.placeholder || "Yes, I agree"}</Label>
-                          </div>
-                        ) : field.type === "file" ? (
-                          <Input 
-                            id={field.id} 
-                            name={field.id} 
-                            type="file" 
-                            required={field.required} 
-                            className="rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                          />
-                        ) : null}
-                      </div>
-                    ))}
-
-                    <hr className="my-8 border-gray-100" />
-
-                    {/* Mandatory Payment Section */}
-                    <div className="space-y-6">
-                      <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
-                      <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
-                        Please ensure you have sent <strong>₹{event.price}</strong> to the UPI details shown on the right before submitting this form.
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="utr_id" className="text-gray-700 font-medium">UTR / Transaction ID <span className="text-red-500">*</span></Label>
-                        <Input 
-                          id="utr_id" 
-                          name="utr_id" 
-                          placeholder="e.g. 123456789012" 
-                          required 
-                          className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6 font-mono"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="payment_screenshot" className="text-gray-700 font-medium">Payment Screenshot <span className="text-red-500">*</span></Label>
-                        <Input 
-                          id="payment_screenshot" 
-                          name="payment_screenshot" 
-                          type="file" 
-                          accept="image/*"
-                          required 
-                          className="rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-
-                    <SubmitButton 
-                      className="w-full py-6 text-base font-semibold rounded-xl bg-gray-900 hover:bg-primary transition-all duration-300 text-white shadow-md hover:shadow-primary/25 mt-8"
-                      pendingText="Submitting..."
-                    >
-                      Submit Registration
-                    </SubmitButton>
+                    {/* Dynamic Fields from Client */}
+                    <DynamicFormClient event={event} formConfig={formConfig} isWaitlistMode={isWaitlistMode} />
                   </form>
                 </>
               )}

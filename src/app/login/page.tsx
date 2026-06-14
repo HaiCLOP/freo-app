@@ -1,22 +1,53 @@
-import { login } from "./actions";
-import { SubmitButton } from "@/components/submit-button";
+"use client";
+
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Mail, ArrowRight } from "lucide-react";
+import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: 'Login | Freo',
-};
+export default function LoginPage() {
+  const supabase = createClient();
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const resolvedParams = await searchParams;
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        if (signInError.message.includes("Invalid login")) {
+          setError("Invalid email or password.");
+        } else {
+          setError(signInError.message);
+        }
+        setLoading(false);
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "An error occurred during sign in.");
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -61,11 +92,11 @@ export default async function LoginPage({
           </div>
 
           <div className="bg-[#2A2B31] border border-[#3A3B41] rounded-2xl p-8 subtle-shadow">
-            <form action={login} className="space-y-5">
-              {resolvedParams.error && (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {error && (
                 <div className="bg-red-500/10 text-red-400 text-sm p-4 rounded-xl border border-red-500/20 flex items-center gap-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div>
-                  {resolvedParams.error}
+                  {error}
                 </div>
               )}
               
@@ -101,21 +132,25 @@ export default async function LoginPage({
                 </div>
               </div>
 
-              <SubmitButton
-                className="w-full py-6 text-base font-bold rounded-xl bg-[#DDFE55] hover:bg-[#c9eb44] transition-all duration-300 text-[#1B1C20] shadow-md hover:shadow-[#DDFE55]/25 mt-4 group"
-                pendingText="Signing In..."
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center py-4 text-base font-bold rounded-xl bg-[#DDFE55] hover:bg-[#c9eb44] disabled:bg-[#DDFE55]/50 transition-all duration-300 text-[#1B1C20] shadow-md mt-4 group"
               >
-                Sign In
-                <ArrowRight className="w-4 h-4 ml-2 opacity-70 group-hover:translate-x-1 transition-transform" />
-              </SubmitButton>
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    Sign In
+                    <ArrowRight className="w-4 h-4 ml-2 opacity-70 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
             </form>
             
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-400">
-                Don't have an account?{" "}
-                <Link href="/register" className="text-[#DDFE55] hover:underline font-medium">
-                  Sign up
-                </Link>
+                Freo is currently invite-only.
               </p>
             </div>
           </div>

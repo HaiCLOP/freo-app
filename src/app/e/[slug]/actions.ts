@@ -3,18 +3,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { uploadFile, getFileUrl } from "@/lib/storage";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/email";
 import { z } from "zod";
 import { headers } from "next/headers";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 const registrationSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name is too long"),
   phone: z.string().min(10, "Phone is too short").max(20, "Phone is too long").regex(/^[0-9+\-\s()]+$/, "Invalid phone format"),
   email: z.string().email("Invalid email format").max(255, "Email is too long"),
-  herbalife_id: z.string().max(50, "Herbalife ID is too long").optional().nullable(),
-  sponsor: z.string().max(100, "Sponsor name is too long").optional().nullable(),
   utr_id: z.string().min(4, "UTR is too short").max(50, "UTR is too long"),
 });
 
@@ -66,7 +62,9 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     .neq("status", "rejected");
 
   if ((totalRegs || 0) >= event.max_capacity) {
-    redirect(`/e/${eventSlug}?error=sold_out`);
+    if (!event.form_settings?.waitlistEnabled) {
+      redirect(`/e/${eventSlug}?error=sold_out`);
+    }
   }
 
   if (event.phase_registration) {
@@ -83,6 +81,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       .select("*", { count: 'exact', head: true })
       .eq("event_id", eventId)
       .neq("status", "rejected")
+      .neq("status", "waitlisted") // Do not count waitlisted towards daily limit
       .gte("registered_at", todayStart.toISOString())
       .lte("registered_at", todayEnd.toISOString());
 
@@ -96,8 +95,6 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     name: formData.get("name") as string,
     phone: formData.get("phone") as string,
     email: formData.get("email") as string,
-    herbalife_id: formData.get("herbalife_id") as string || null,
-    sponsor: formData.get("sponsor") as string || null,
     utr_id: formData.get("utr_id") as string,
   };
 
@@ -107,7 +104,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     redirect(`/e/${eventSlug}?error=invalid_data`);
   }
 
-  const { name: full_name, phone, email, herbalife_id, sponsor: sponsor_name, utr_id } = validationResult.data;
+  const { name: full_name, phone, email, utr_id } = validationResult.data;
   
   // 3. Handle File Uploads → Google Drive or Supabase Storage (auto-detected)
   const screenshot = formData.get("payment_screenshot") as File;
@@ -132,9 +129,9 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
         event.creator_id, eventSlug, "payment-screenshots",
         `${Date.now()}-payment.${ext}`, screenshot, false
       );
-    } catch (uploadError) {
+    } catch (uploadError: any) {
       console.error("Screenshot upload failed", uploadError);
-      throw new Error("Failed to upload screenshot");
+      throw new Error(uploadError?.message || "Failed to upload screenshot");
     }
   }
 
@@ -143,9 +140,9 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   const formConfig: any[] = event.form_config || [];
   
   for (const field of formConfig) {
-    if (["name", "phone", "email", "herbalife_id", "sponsor"].includes(field.id)) continue;
+    if (["name", "phone", "email"].includes(field.id)) continue;
     
-    if (field.type === "file") {
+    if (field.type === "file" || field.type === "file_upload") {
       const file = formData.get(field.id) as File;
       if (file && file.size > 0) {
         // Enforce strict MIME types for custom file uploads
@@ -169,10 +166,24 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
             `${Date.now()}-${field.id}.${ext}`, file, false
           );
           custom_fields[field.id] = uploadedRef;
-        } catch {
-          console.error(`Failed to upload custom field file: ${field.id}`);
+        } catch (uploadError: any) {
+          console.error(`Failed to upload custom field file: ${field.id}`, uploadError);
+          throw new Error(uploadError?.message || `Failed to upload file for ${field.label || field.id}`);
         }
       }
+    } else if (field.type === "checkbox_grid") {
+      const rows = field.gridRows?.split(',') || [];
+      const gridResult: Record<string, string[]> = {};
+      
+      for (const r of rows) {
+        const rowKey = r.trim();
+        if (!rowKey) continue;
+        const values = formData.getAll(`${field.id}_${rowKey}`) as string[];
+        if (values && values.length > 0) {
+          gridResult[rowKey] = values;
+        }
+      }
+      custom_fields[field.id] = gridResult;
     } else if (field.type === "checkbox") {
       custom_fields[field.id] = formData.get(field.id) === "on";
     } else {
@@ -181,16 +192,15 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   }
 
   // 5. Insert Registration using Atomic RPC
-  const { error: insertError } = await supabase.rpc('register_for_event', {
+  const { error: insertError, data: insertData } = await supabase.rpc('register_for_event', {
     p_event_id: eventId,
     p_full_name: full_name,
     p_phone: phone,
     p_email: email,
-    p_herbalife_id: herbalife_id,
-    p_sponsor_name: sponsor_name,
     p_utr_id: utr_id,
     p_payment_screenshot_url: payment_screenshot_url,
-    p_custom_fields: custom_fields
+    p_custom_fields: custom_fields,
+    p_waitlist_enabled: event.form_settings?.waitlistEnabled || false
   });
 
   if (insertError) {
@@ -200,6 +210,9 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     }
     redirect(`/e/${eventSlug}?error=submission_failed`);
   }
+
+  // Check if waitlisted
+  const isWaitlisted = insertData?.status === 'waitlisted';
 
   // 6. Write to Google Sheet directly (with queue fallback)
   if (event.google_sheet_id) {
@@ -231,10 +244,8 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       full_name,
       phone,
       email,
-      herbalife_id || "",
-      sponsor_name || "",
       utr_id,
-      "Pending",
+      isWaitlisted ? "Waitlisted" : "Pending",
       registeredAt,
       "", // Approved At is empty for now
       publicScreenshotUrl
@@ -269,7 +280,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
         }[tag] || tag)
     );
 
-    await resend.emails.send({
+    await sendEmail({
       from: process.env.RESEND_FROM_EMAIL!,
       to: email,
       subject: `Registration Received - ${escapeHTML(event.name)}`,

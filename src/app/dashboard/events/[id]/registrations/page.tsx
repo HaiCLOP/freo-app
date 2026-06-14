@@ -53,6 +53,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
   const totalRegistrations = registrations?.filter(r => r.status !== 'rejected').length || 0;
   const pendingRegistrations = registrations?.filter(r => r.status === 'pending').length || 0;
   const approvedRegistrations = registrations?.filter(r => r.status === 'approved').length || 0;
+  const waitlistedRegistrations = registrations?.filter(r => r.status === 'waitlisted').length || 0;
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-10 animate-in fade-in duration-700">
@@ -82,7 +83,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden">
           <CardContent className="p-7">
             <div className="flex items-center justify-between mb-2">
@@ -104,6 +105,18 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
               </div>
             </div>
             <h3 className="text-4xl font-semibold text-[#1d1d1f] tracking-tight">{approvedRegistrations}</h3>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden">
+          <CardContent className="p-7">
+             <div className="flex items-center justify-between mb-2">
+              <p className="text-[15px] font-medium text-[#86868b]">Waitlisted</p>
+              <div className="p-2 bg-blue-500/10 text-blue-500 rounded-full">
+                <Clock className="w-5 h-5" />
+              </div>
+            </div>
+            <h3 className="text-4xl font-semibold text-[#1d1d1f] tracking-tight">{waitlistedRegistrations}</h3>
           </CardContent>
         </Card>
         
@@ -144,11 +157,11 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                       {reg.status === 'pending' && <Badge variant="secondary" className="bg-[#ff3b30]/10 text-[#ff3b30] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Pending</Badge>}
                       {reg.status === 'approved' && <Badge variant="secondary" className="bg-[#34c759]/10 text-[#34c759] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Approved</Badge>}
                       {reg.status === 'rejected' && <Badge variant="secondary" className="bg-[#86868b]/10 text-[#86868b] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Rejected</Badge>}
+                      {reg.status === 'waitlisted' && <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Waitlisted</Badge>}
                     </div>
                     <div className="text-[15px] text-[#86868b] flex flex-wrap gap-x-5 gap-y-1">
                       <span>Email: <span className="text-[#1d1d1f] font-medium">{reg.email}</span></span>
                       <span>Phone: <span className="text-[#1d1d1f] font-medium">{reg.phone}</span></span>
-                      {reg.herbalife_id && <span>HLF ID: <span className="text-[#1d1d1f] font-medium">{reg.herbalife_id}</span></span>}
                     </div>
                     <div className="text-[14px] text-[#86868b] mt-3 flex items-center">
                       UTR ID: <code className="ml-2 bg-[#f5f5f7] px-2.5 py-1 rounded-md text-[#1d1d1f] font-mono tracking-wider text-sm border border-[#e5e5ea]">{reg.utr_id}</code>
@@ -186,7 +199,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 md:pl-4">
-                    {reg.status === 'pending' ? (
+                    {reg.status === 'pending' || reg.status === 'waitlisted' ? (
                       <>
                         <form action={approveRegistration.bind(null, reg.id, eventId)}>
                           <SubmitButton size="sm" className="bg-[#34c759] hover:bg-[#2eb050] text-white rounded-full px-5 h-9 font-medium transition-colors shadow-sm" pendingText="Approving...">

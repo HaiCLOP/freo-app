@@ -1,6 +1,14 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  TrendingUp,
+  Users,
+  IndianRupee,
+  ScanLine,
+  Percent,
+  ChevronRight,
+} from "lucide-react";
 import Link from "next/link";
 
 // --- Types ---
@@ -53,23 +61,6 @@ function formatShortDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// --- Colors (Fey-inspired, Freo-branded) ---
-const C = {
-  canvas: "#0b0b0b",
-  card: "#131313",
-  elevated: "#191919",
-  accent: "#DDFE55",       // Freo brand green — maps to Fey's accent role
-  blue: "#479ffa",         // Signal Blue — charts & interactive
-  green: "#4ebe96",        // Tape Green — positive signals
-  orange: "#ffa16c",       // Ember Orange — section labels only
-  red: "#ff6b6b",          // Rejection / negative
-  snow: "#ffffff",
-  fog: "#868f97",
-  ash: "#cccccc",
-  slate: "#525252",
-  platinum: "#e6e6e6",
-};
-
 // --- Component ---
 export function AnalyticsDashboard({
   kpis,
@@ -84,99 +75,79 @@ export function AnalyticsDashboard({
   const maxDayCount = Math.max(...dayOfWeekCounts, 1);
 
   return (
-    <div
-      className="min-h-full -m-6 md:-m-10 p-6 md:p-10"
-      style={{ backgroundColor: C.canvas }}
-    >
-      <div className="max-w-[1200px] mx-auto space-y-10 animate-in fade-in duration-700 pb-10">
-        {/* Header */}
-        <div>
-          <p
-            className="text-xs font-medium uppercase tracking-wider mb-3"
-            style={{ color: C.orange, letterSpacing: "0.05em" }}
-          >
-            Analytics
-          </p>
-          <h1
-            className="text-4xl md:text-[48px] font-semibold"
-            style={{
-              color: C.snow,
-              letterSpacing: "-0.08em",
-              lineHeight: 1.1,
-            }}
-          >
-            Performance
-          </h1>
-          <p
-            className="mt-3 text-[15px]"
-            style={{ color: C.fog, letterSpacing: "-0.05em" }}
-          >
-            Insights across {kpis.totalEvents} event
-            {kpis.totalEvents !== 1 ? "s" : ""} — registration trends, revenue,
-            and check-in rates.
-          </p>
-        </div>
+    <div className="space-y-10 animate-in fade-in duration-700 pb-10">
+      {/* Header */}
+      <div>
+        <h1 className="text-4xl font-semibold tracking-tight text-[#1d1d1f]">
+          Analytics
+        </h1>
+        <p className="text-[#86868b] mt-2 text-lg font-medium">
+          Insights across {kpis.totalEvents} event
+          {kpis.totalEvents !== 1 ? "s" : ""}.
+        </p>
+      </div>
 
-        {/* KPI Cards */}
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-          <KpiCard
-            label="Registrations"
-            value={kpis.totalRegistrations.toLocaleString("en-IN")}
-            sub={`${kpis.approvedCount} approved`}
-          />
-          <KpiCard
-            label="Revenue"
-            value={`₹${kpis.totalRevenue.toLocaleString("en-IN")}`}
-            sub="From approved"
-            valueColor={C.green}
-          />
-          <KpiCard
-            label="Check-in Rate"
-            value={`${kpis.checkInRate}%`}
-            sub={`${kpis.checkedInCount} scanned`}
-          />
-          <KpiCard
-            label="Approval Rate"
-            value={`${kpis.approvalRate}%`}
-            sub={`${kpis.pendingCount} pending`}
-          />
-        </div>
+      {/* KPI Cards */}
+      <div className="grid gap-6 grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label="Total Registrations"
+          value={kpis.totalRegistrations.toLocaleString("en-IN")}
+          icon={<Users className="w-5 h-5" />}
+          iconBg="bg-blue-50"
+          iconColor="text-blue-500"
+          sub={`${kpis.approvedCount} approved`}
+          positive={kpis.approvedCount > 0}
+        />
+        <KpiCard
+          label="Total Revenue"
+          value={`₹${kpis.totalRevenue.toLocaleString("en-IN")}`}
+          icon={<IndianRupee className="w-5 h-5" />}
+          iconBg="bg-green-50"
+          iconColor="text-[#34c759]"
+          sub="From approved registrations"
+          positive={kpis.totalRevenue > 0}
+        />
+        <KpiCard
+          label="Check-in Rate"
+          value={`${kpis.checkInRate}%`}
+          icon={<ScanLine className="w-5 h-5" />}
+          iconBg="bg-orange-50"
+          iconColor="text-orange-500"
+          sub={`${kpis.checkedInCount} scanned at door`}
+          positive={kpis.checkedInCount > 0}
+        />
+        <KpiCard
+          label="Approval Rate"
+          value={`${kpis.approvalRate}%`}
+          icon={<Percent className="w-5 h-5" />}
+          iconBg="bg-purple-50"
+          iconColor="text-purple-500"
+          sub={`${kpis.pendingCount} still pending`}
+          positive={kpis.approvalRate > 50}
+        />
+      </div>
 
-        {/* Charts Row */}
-        <div className="grid gap-4 lg:grid-cols-3">
-          {/* Registration Trend (30 days) */}
-          <div
-            className="lg:col-span-2 rounded-2xl p-6 md:p-7"
-            style={{ backgroundColor: C.card }}
-          >
+      {/* Charts Row */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Registration Trend (30 days) */}
+        <Card className="lg:col-span-2 rounded-[24px] border border-[#f5f5f7] shadow-sm bg-white overflow-hidden">
+          <CardContent className="p-7">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3
-                  className="text-[18px] font-semibold"
-                  style={{
-                    color: C.snow,
-                    letterSpacing: "-0.05em",
-                  }}
-                >
+                <h3 className="text-[17px] font-semibold text-[#1d1d1f]">
                   Registration Trend
                 </h3>
-                <p
-                  className="text-[12px] font-medium mt-1"
-                  style={{ color: C.fog }}
-                >
+                <p className="text-[13px] text-[#86868b] font-medium mt-0.5">
                   Last 30 days
                 </p>
               </div>
-              <span
-                className="text-[12px] font-semibold"
-                style={{ color: C.accent }}
-              >
+              <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#34c759]">
+                <TrendingUp className="w-4 h-4" />
                 {trendData.reduce((s, t) => s + t.count, 0)} total
-              </span>
+              </div>
             </div>
 
-            {/* Bar chart */}
-            <div className="flex items-end gap-[2px] h-36">
+            <div className="flex items-end gap-[3px] h-40">
               {trendData.map((d, i) => {
                 const h = maxTrend > 0 ? (d.count / maxTrend) * 100 : 0;
                 return (
@@ -186,33 +157,21 @@ export function AnalyticsDashboard({
                     title={`${formatShortDate(d.date)}: ${d.count}`}
                   >
                     <div
-                      className="w-full rounded-t-[2px] transition-all duration-300 group-hover:opacity-70"
+                      className="w-full rounded-t-[3px] transition-all duration-300 group-hover:opacity-70"
                       style={{
                         height: `${Math.max(h, 2)}%`,
                         backgroundColor:
-                          d.count > 0
-                            ? C.accent
-                            : `${C.slate}40`,
+                          d.count > 0 ? "#1B1C20" : "#f5f5f7",
                       }}
                     />
-                    <div
-                      className="absolute -top-9 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10"
-                      style={{
-                        backgroundColor: C.elevated,
-                        color: C.snow,
-                        border: `1px solid ${C.slate}`,
-                      }}
-                    >
+                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#1B1C20] text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
                       {formatShortDate(d.date)}: {d.count}
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div
-              className="flex justify-between mt-3 text-[10px] font-medium"
-              style={{ color: C.fog }}
-            >
+            <div className="flex justify-between mt-3 text-[11px] text-[#86868b] font-medium">
               <span>{formatShortDate(trendData[0].date)}</span>
               <span>
                 {formatShortDate(
@@ -223,34 +182,24 @@ export function AnalyticsDashboard({
                 {formatShortDate(trendData[trendData.length - 1].date)}
               </span>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* Peak Hours */}
-          <div
-            className="rounded-2xl p-6 md:p-7 flex flex-col"
-            style={{ backgroundColor: C.card }}
-          >
+        {/* Peak Hours */}
+        <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm bg-white overflow-hidden">
+          <CardContent className="p-7 h-full flex flex-col">
             <div className="mb-6">
-              <h3
-                className="text-[18px] font-semibold"
-                style={{
-                  color: C.snow,
-                  letterSpacing: "-0.05em",
-                }}
-              >
+              <h3 className="text-[17px] font-semibold text-[#1d1d1f]">
                 Peak Hours
               </h3>
-              <p
-                className="text-[12px] font-medium mt-1"
-                style={{ color: C.fog }}
-              >
+              <p className="text-[13px] text-[#86868b] font-medium mt-0.5">
                 Busiest at{" "}
-                <span style={{ color: C.accent }} className="font-bold">
+                <span className="text-[#1d1d1f] font-bold">
                   {formatHour(peakHour)}
                 </span>
               </p>
             </div>
-            <div className="flex-1 flex items-end gap-[2px]">
+            <div className="flex-1 flex items-end gap-[3px]">
               {hourCounts.map((count, h) => {
                 const height = maxHour > 0 ? (count / maxHour) * 100 : 0;
                 const isPeak = h === peakHour && count > 0;
@@ -265,57 +214,40 @@ export function AnalyticsDashboard({
                       style={{
                         height: `${Math.max(height, 2)}%`,
                         backgroundColor: isPeak
-                          ? C.accent
+                          ? "#DDFE55"
                           : count > 0
-                          ? `${C.accent}50`
-                          : `${C.slate}30`,
+                          ? "#1B1C20"
+                          : "#f5f5f7",
                       }}
                     />
-                    <div
-                      className="absolute -top-8 left-1/2 -translate-x-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10"
-                      style={{
-                        backgroundColor: C.elevated,
-                        color: C.snow,
-                        border: `1px solid ${C.slate}`,
-                      }}
-                    >
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#1B1C20] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
                       {formatHour(h)}: {count}
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div
-              className="flex justify-between mt-3 text-[10px] font-medium"
-              style={{ color: C.fog }}
-            >
+            <div className="flex justify-between mt-3 text-[11px] text-[#86868b] font-medium">
               <span>12 AM</span>
               <span>12 PM</span>
               <span>11 PM</span>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Day of Week + Status Breakdown */}
-        <div className="grid gap-4 lg:grid-cols-2">
-          {/* Day of Week */}
-          <div
-            className="rounded-2xl p-6 md:p-7"
-            style={{ backgroundColor: C.card }}
-          >
-            <h3
-              className="text-[18px] font-semibold mb-1"
-              style={{ color: C.snow, letterSpacing: "-0.05em" }}
-            >
+      {/* Day of Week + Status Breakdown */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Day of Week */}
+        <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm bg-white overflow-hidden">
+          <CardContent className="p-7">
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
               Registrations by Day
             </h3>
-            <p
-              className="text-[12px] font-medium mb-6"
-              style={{ color: C.fog }}
-            >
+            <p className="text-[13px] text-[#86868b] font-medium mb-6">
               Which day of the week gets the most signups
             </p>
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {DAYS.map((day, i) => {
                 const pct =
                   maxDayCount > 0
@@ -323,245 +255,146 @@ export function AnalyticsDashboard({
                     : 0;
                 const isMax = pct === 100 && dayOfWeekCounts[i] > 0;
                 return (
-                  <div key={day} className="flex items-center gap-3">
-                    <span
-                      className="w-8 text-[12px] font-medium shrink-0"
-                      style={{ color: C.fog }}
-                    >
+                  <div key={day} className="flex items-center gap-4">
+                    <span className="w-10 text-[13px] font-semibold text-[#86868b] shrink-0">
                       {day}
                     </span>
-                    <div
-                      className="flex-1 h-5 rounded overflow-hidden"
-                      style={{ backgroundColor: `${C.slate}30` }}
-                    >
+                    <div className="flex-1 h-6 bg-[#f5f5f7] rounded-full overflow-hidden">
                       <div
-                        className="h-full rounded transition-all duration-500"
+                        className="h-full rounded-full transition-all duration-500"
                         style={{
-                          width: `${Math.max(pct, 2)}%`,
-                          backgroundColor: isMax ? C.accent : C.snow,
-                          opacity: isMax ? 1 : 0.25,
+                          width: `${Math.max(pct, 1)}%`,
+                          backgroundColor: isMax ? "#DDFE55" : "#1B1C20",
                         }}
                       />
                     </div>
-                    <span
-                      className="w-7 text-right text-[12px] font-bold"
-                      style={{ color: isMax ? C.accent : C.ash }}
-                    >
+                    <span className="w-8 text-right text-[13px] font-bold text-[#1d1d1f]">
                       {dayOfWeekCounts[i]}
                     </span>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {/* Status Breakdown */}
-          <div
-            className="rounded-2xl p-6 md:p-7 flex flex-col"
-            style={{ backgroundColor: C.card }}
-          >
-            <h3
-              className="text-[18px] font-semibold mb-1"
-              style={{ color: C.snow, letterSpacing: "-0.05em" }}
-            >
+        {/* Status Breakdown */}
+        <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm bg-white overflow-hidden">
+          <CardContent className="p-7 h-full flex flex-col">
+            <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
               Status Breakdown
             </h3>
-            <p
-              className="text-[12px] font-medium mb-6"
-              style={{ color: C.fog }}
-            >
+            <p className="text-[13px] text-[#86868b] font-medium mb-6">
               Overall registration statuses
             </p>
-            <div className="flex-1 flex flex-col justify-center gap-4">
+            <div className="flex-1 flex flex-col justify-center gap-5">
               <StatusRow
                 label="Approved"
                 count={kpis.approvedCount}
                 total={kpis.totalRegistrations}
-                color={C.green}
+                color="#34c759"
               />
               <StatusRow
                 label="Pending"
                 count={kpis.pendingCount}
                 total={kpis.totalRegistrations}
-                color={C.orange}
+                color="#ff9500"
               />
               <StatusRow
                 label="Rejected"
                 count={kpis.rejectedCount}
                 total={kpis.totalRegistrations}
-                color={C.red}
+                color="#ff3b30"
               />
               <StatusRow
                 label="Checked In"
                 count={kpis.checkedInCount}
                 total={kpis.totalRegistrations}
-                color={C.blue}
+                color="#0066cc"
               />
             </div>
-          </div>
-        </div>
-
-        {/* Per-Event Table */}
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{
-            backgroundColor: C.card,
-            border: `1px solid ${C.slate}40`,
-          }}
-        >
-          <div className="p-6 md:p-7 pb-4">
-            <p
-              className="text-[11px] font-medium uppercase tracking-wider mb-2"
-              style={{ color: C.orange }}
-            >
-              Breakdown
-            </p>
-            <h3
-              className="text-[18px] font-semibold"
-              style={{ color: C.snow, letterSpacing: "-0.05em" }}
-            >
-              Event Performance
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px]">
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${C.slate}50` }}>
-                  {[
-                    { label: "Event", align: "left" },
-                    { label: "Regs", align: "right" },
-                    { label: "Approved", align: "right" },
-                    { label: "Pending", align: "right" },
-                    { label: "Checked In", align: "right" },
-                    { label: "Revenue", align: "right" },
-                    { label: "Fill", align: "right" },
-                    { label: "", align: "right" },
-                  ].map((col, i) => (
-                    <th
-                      key={i}
-                      className={`py-3 px-5 text-[11px] font-semibold uppercase tracking-wider ${
-                        col.align === "right" ? "text-right" : ""
-                      }`}
-                      style={{ color: C.fog }}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {perEvent.map((ev, idx) => (
-                  <tr
-                    key={ev.id}
-                    className="transition-colors group"
-                    style={{
-                      borderBottom:
-                        idx < perEvent.length - 1
-                          ? `1px solid ${C.slate}30`
-                          : "none",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor = C.elevated)
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.backgroundColor = "transparent")
-                    }
-                  >
-                    <td className="py-4 px-5">
-                      <p
-                        className="font-semibold text-[14px]"
-                        style={{ color: C.snow }}
-                      >
-                        {ev.name}
-                      </p>
-                      <p
-                        className="text-[11px] font-medium mt-0.5"
-                        style={{ color: C.fog }}
-                      >
-                        {new Date(ev.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </td>
-                    <td
-                      className="py-4 px-5 text-right font-semibold text-[14px]"
-                      style={{ color: C.snow }}
-                    >
-                      {ev.total}
-                    </td>
-                    <td
-                      className="py-4 px-5 text-right font-semibold text-[14px]"
-                      style={{ color: C.green }}
-                    >
-                      {ev.approved}
-                    </td>
-                    <td
-                      className="py-4 px-5 text-right font-semibold text-[14px]"
-                      style={{ color: C.orange }}
-                    >
-                      {ev.pending}
-                    </td>
-                    <td
-                      className="py-4 px-5 text-right font-semibold text-[14px]"
-                      style={{ color: C.blue }}
-                    >
-                      {ev.checkedIn}
-                    </td>
-                    <td
-                      className="py-4 px-5 text-right font-semibold text-[14px]"
-                      style={{ color: C.snow }}
-                    >
-                      ₹{ev.revenue.toLocaleString("en-IN")}
-                    </td>
-                    <td className="py-4 px-5 text-right">
-                      {ev.fillRate !== null ? (
-                        <span
-                          className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-md"
-                          style={{
-                            border: `1px solid ${
-                              ev.fillRate >= 90
-                                ? C.red
-                                : ev.fillRate >= 50
-                                ? C.orange
-                                : C.green
-                            }`,
-                            color:
-                              ev.fillRate >= 90
-                                ? C.red
-                                : ev.fillRate >= 50
-                                ? C.orange
-                                : C.green,
-                          }}
-                        >
-                          {ev.fillRate}%
-                        </span>
-                      ) : (
-                        <span
-                          className="text-[11px]"
-                          style={{ color: C.fog }}
-                        >
-                          —
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-5">
-                      <Link
-                        href={`/dashboard/events/${ev.id}/registrations`}
-                        style={{ color: C.fog }}
-                        className="hover:opacity-70 transition-opacity"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Per-Event Table */}
+      <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm bg-white overflow-hidden">
+        <div className="p-7 pb-4">
+          <h3 className="text-[17px] font-semibold text-[#1d1d1f]">
+            Event Performance
+          </h3>
+          <p className="text-[13px] text-[#86868b] font-medium mt-0.5">
+            Detailed breakdown per event
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className="border-y border-[#f5f5f7]">
+                <th className="py-4 px-7 text-[12px] font-semibold text-[#86868b] uppercase tracking-wider">Event</th>
+                <th className="py-4 px-4 text-[12px] font-semibold text-[#86868b] uppercase tracking-wider text-right">Regs</th>
+                <th className="py-4 px-4 text-[12px] font-semibold text-[#86868b] uppercase tracking-wider text-right">Approved</th>
+                <th className="py-4 px-4 text-[12px] font-semibold text-[#86868b] uppercase tracking-wider text-right">Pending</th>
+                <th className="py-4 px-4 text-[12px] font-semibold text-[#86868b] uppercase tracking-wider text-right">Checked In</th>
+                <th className="py-4 px-4 text-[12px] font-semibold text-[#86868b] uppercase tracking-wider text-right">Revenue</th>
+                <th className="py-4 px-4 text-[12px] font-semibold text-[#86868b] uppercase tracking-wider text-right">Fill</th>
+                <th className="py-4 px-4"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f5f5f7]">
+              {perEvent.map((ev) => (
+                <tr
+                  key={ev.id}
+                  className="hover:bg-[#f5f5f7]/50 transition-colors group"
+                >
+                  <td className="py-4 px-7">
+                    <p className="font-semibold text-[#1d1d1f] text-[14px]">
+                      {ev.name}
+                    </p>
+                    <p className="text-[12px] text-[#86868b] font-medium mt-0.5">
+                      {new Date(ev.date).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </td>
+                  <td className="py-4 px-4 text-right font-semibold text-[14px] text-[#1d1d1f]">{ev.total}</td>
+                  <td className="py-4 px-4 text-right font-semibold text-[14px] text-[#34c759]">{ev.approved}</td>
+                  <td className="py-4 px-4 text-right font-semibold text-[14px] text-[#ff9500]">{ev.pending}</td>
+                  <td className="py-4 px-4 text-right font-semibold text-[14px] text-[#0066cc]">{ev.checkedIn}</td>
+                  <td className="py-4 px-4 text-right font-semibold text-[14px] text-[#1d1d1f]">₹{ev.revenue.toLocaleString("en-IN")}</td>
+                  <td className="py-4 px-4 text-right">
+                    {ev.fillRate !== null ? (
+                      <span
+                        className={`inline-flex items-center text-[12px] font-bold px-2.5 py-1 rounded-full ${
+                          ev.fillRate >= 90
+                            ? "bg-[#ff3b30]/10 text-[#ff3b30]"
+                            : ev.fillRate >= 50
+                            ? "bg-[#ff9500]/10 text-[#ff9500]"
+                            : "bg-[#34c759]/10 text-[#34c759]"
+                        }`}
+                      >
+                        {ev.fillRate}%
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-[#86868b]">—</span>
+                    )}
+                  </td>
+                  <td className="py-4 px-4">
+                    <Link
+                      href={`/dashboard/events/${ev.id}/registrations`}
+                      className="text-[#0066cc] hover:text-[#004499] transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -571,39 +404,38 @@ export function AnalyticsDashboard({
 function KpiCard({
   label,
   value,
+  icon,
+  iconBg,
+  iconColor,
   sub,
-  valueColor,
+  positive,
 }: {
   label: string;
   value: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  iconColor: string;
   sub: string;
-  valueColor?: string;
+  positive: boolean;
 }) {
   return (
-    <div
-      className="rounded-2xl p-5 md:p-6 transition-colors"
-      style={{ backgroundColor: C.card }}
-    >
-      <p
-        className="text-[12px] font-medium uppercase tracking-wider mb-3"
-        style={{ color: C.fog }}
-      >
-        {label}
-      </p>
-      <h3
-        className="text-[28px] md:text-[32px] font-semibold mb-1"
-        style={{
-          color: valueColor || C.snow,
-          letterSpacing: "-0.05em",
-          lineHeight: 1.1,
-        }}
-      >
-        {value}
-      </h3>
-      <p className="text-[12px] font-medium" style={{ color: C.fog }}>
-        {sub}
-      </p>
-    </div>
+    <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden">
+      <CardContent className="p-7">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[15px] font-medium text-[#86868b]">{label}</p>
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center ${iconBg} ${iconColor}`}>
+            {icon}
+          </div>
+        </div>
+        <h3 className="text-4xl font-semibold text-[#1d1d1f] tracking-tight mb-1">
+          {value}
+        </h3>
+        <div className={`flex items-center text-sm font-medium ${positive ? "text-[#34c759]" : "text-[#86868b]"}`}>
+          {positive && <TrendingUp className="w-4 h-4 mr-1.5" />}
+          <span>{sub}</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -620,21 +452,15 @@ function StatusRow({
 }) {
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-4">
       <div
-        className="w-2 h-2 rounded-full shrink-0"
+        className="w-3 h-3 rounded-full shrink-0"
         style={{ backgroundColor: color }}
       />
-      <span
-        className="w-20 text-[13px] font-medium"
-        style={{ color: C.ash }}
-      >
+      <span className="w-24 text-[14px] font-medium text-[#1d1d1f]">
         {label}
       </span>
-      <div
-        className="flex-1 h-2 rounded-full overflow-hidden"
-        style={{ backgroundColor: `${C.slate}30` }}
-      >
+      <div className="flex-1 h-3 bg-[#f5f5f7] rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-700"
           style={{
@@ -643,16 +469,10 @@ function StatusRow({
           }}
         />
       </div>
-      <span
-        className="w-8 text-right text-[13px] font-bold"
-        style={{ color: C.snow }}
-      >
+      <span className="w-12 text-right text-[14px] font-bold text-[#1d1d1f]">
         {count}
       </span>
-      <span
-        className="w-10 text-right text-[11px] font-medium"
-        style={{ color: C.fog }}
-      >
+      <span className="w-10 text-right text-[12px] font-medium text-[#86868b]">
         {pct}%
       </span>
     </div>

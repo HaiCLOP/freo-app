@@ -46,9 +46,17 @@ export async function uploadFile(
 
   if (creator?.google_access_token) {
     // Use Google Drive
-    const { uploadToDrive } = await import("@/lib/google-drive");
-    const result = await uploadToDrive(creatorId, eventSlug, category, fileName, file, isPublic);
-    return result.url;
+    try {
+      const { uploadToDrive } = await import("@/lib/google-drive");
+      const result = await uploadToDrive(creatorId, eventSlug, category, fileName, file, isPublic);
+      return result.url;
+    } catch (googleError: any) {
+      if (googleError?.message === "unauthorized_client" || googleError?.message?.includes("invalid_grant")) {
+        throw new Error("The event organizer's Google Drive connection has expired. They must reconnect their Google account in the dashboard to receive files.");
+      }
+      console.error("Google Drive upload failed:", googleError);
+      throw new Error("Failed to upload file to Google Drive. Please try again.");
+    }
   }
 
   // Fallback: Supabase Storage

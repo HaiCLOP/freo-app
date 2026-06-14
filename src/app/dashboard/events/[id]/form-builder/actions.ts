@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-export async function saveFormConfig(eventId: string, config: any[]) {
+export async function saveFormConfig(eventId: string, config: any[], settings?: any) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -20,9 +20,14 @@ export async function saveFormConfig(eventId: string, config: any[]) {
     return { error: "Form configuration payload is too large." };
   }
 
+  const updateData: any = { form_config: config };
+  if (settings) {
+    updateData.form_settings = settings;
+  }
+
   const { error } = await supabase
     .from("events")
-    .update({ form_config: config })
+    .update(updateData)
     .eq("id", eventId)
     .eq("creator_id", user.id); // Security check
 
@@ -32,7 +37,7 @@ export async function saveFormConfig(eventId: string, config: any[]) {
   }
 
   revalidatePath(`/dashboard/events/${eventId}/form-builder`);
-  redirect(`/dashboard/events`); // Return to dashboard or events list after saving
+  return { success: true };
 }
 
 export async function getFormConfig(eventId: string) {
@@ -45,7 +50,7 @@ export async function getFormConfig(eventId: string) {
 
   const { data, error } = await supabase
     .from("events")
-    .select("form_config")
+    .select("form_config, form_settings")
     .eq("id", eventId)
     .eq("creator_id", user.id)
     .maybeSingle();
@@ -55,5 +60,8 @@ export async function getFormConfig(eventId: string) {
     return null;
   }
 
-  return data?.form_config || null;
+  return { 
+    form_config: data?.form_config || null,
+    form_settings: data?.form_settings || {} 
+  };
 }

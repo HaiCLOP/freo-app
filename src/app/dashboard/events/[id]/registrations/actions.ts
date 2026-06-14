@@ -2,11 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/email";
 import { updateRowStatusInSheet } from "@/lib/google-sheets";
 import crypto from "crypto";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function approveRegistration(registrationId: string, eventId: string) {
   const supabase = await createClient();
@@ -71,7 +69,7 @@ export async function approveRegistration(registrationId: string, eventId: strin
 
   // Send Approval Email with Digital Ticket
   try {
-    await resend.emails.send({
+    await sendEmail({
       from: process.env.RESEND_FROM_EMAIL!,
       to: reg.email,
       subject: `Ticket Approved! - ${escapeHTML(event.name)}`,
@@ -174,7 +172,7 @@ export async function rejectRegistration(registrationId: string, eventId: string
 
   // Send Rejection Email
   try {
-    await resend.emails.send({
+    await sendEmail({
       from: process.env.RESEND_FROM_EMAIL!,
       to: reg.email,
       subject: `Registration Update - ${escapeHTML(event.name)}`,

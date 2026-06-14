@@ -3,11 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Resend } from "resend";
+import { sendEmail } from "@/lib/email";
 import { headers } from "next/headers";
 import { rateLimit } from "@/lib/rate-limit";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendVerificationEmail(formData: FormData) {
   const headersList = await headers();
@@ -56,7 +54,7 @@ export async function sendVerificationEmail(formData: FormData) {
   const verifyUrl = `${appUrl}/api/verify-notification-email?token=${token}`;
 
   // Send email
-  const { error: emailError } = await resend.emails.send({
+  const { error: emailError } = await sendEmail({
     from: process.env.RESEND_FROM_EMAIL!,
     to: email,
     subject: "Verify your notification email for Freo",

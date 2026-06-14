@@ -2,35 +2,37 @@
 
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, GripVertical, Plus, Trash2, Save, Loader2, Lock } from "lucide-react";
+import { ArrowLeft, GripVertical, Plus, Trash2, Save, Loader2, Lock, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { use } from "react";
 import { saveFormConfig, getFormConfig } from "./actions";
 
-type FieldType = "text" | "number" | "email" | "phone" | "dropdown" | "checkbox" | "file";
+export type FieldType = "text" | "long_text" | "number" | "email" | "phone" | "dropdown" | "checkbox" | "radio" | "file_upload" | "date" | "time" | "rating" | "linear_scale" | "section_divider" | "image" | "page_break" | "checkbox_grid";
 
-interface FormField {
+export interface FormField {
   id: string;
   type: FieldType;
   label: string;
   placeholder?: string;
+  description?: string;
   required: boolean;
   locked: boolean;
-  options?: string; // Comma separated for dropdowns
+  options?: string; // Comma separated for choice fields, or accepted extensions for file_upload
+  gridRows?: string; // Comma separated rows for checkbox_grid
+  validation?: any; // e.g. min, max
+  logic?: any; // Conditional logic rules
 }
 
 const DEFAULT_FIELDS: FormField[] = [
   { id: "name", type: "text", label: "Full Name", placeholder: "Enter your full name", required: true, locked: true },
   { id: "phone", type: "phone", label: "Phone Number", placeholder: "10-digit mobile number", required: true, locked: true },
   { id: "email", type: "email", label: "Email Address", placeholder: "john@example.com", required: true, locked: true },
-  { id: "herbalife_id", type: "text", label: "Herbalife ID", placeholder: "Enter your ID", required: true, locked: false },
-  { id: "sponsor", type: "text", label: "Sponsor Name", placeholder: "Name of your sponsor", required: true, locked: false },
 ];
 
 export default function FormBuilderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -38,21 +40,99 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
   const [fields, setFields] = useState<FormField[]>(DEFAULT_FIELDS);
   const [isSaving, setIsSaving] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [lastSavedFields, setLastSavedFields] = useState<string>("");
 
+  const [isFirstTimeBuilder, setIsFirstTimeBuilder] = useState(false);
+
+  const [formSettings, setFormSettings] = useState<{ isClosed: boolean; closedMessage: string; waitlistEnabled: boolean }>({ isClosed: false, closedMessage: "", waitlistEnabled: false });
+  const [lastSavedSettings, setLastSavedSettings] = useState<string>("");
+
+  // Load Initial Config
   useEffect(() => {
     setIsMounted(true);
     async function loadConfig() {
       try {
-        const savedConfig = await getFormConfig(resolvedParams.id);
-        if (savedConfig && Array.isArray(savedConfig) && savedConfig.length > 0) {
-          setFields(savedConfig as FormField[]);
+        const savedData = await getFormConfig(resolvedParams.id);
+        const localSaved = localStorage.getItem(`freo_builder_progress_${resolvedParams.id}`);
+        
+        let loadedFields = DEFAULT_FIELDS;
+        let loadedSettings = { isClosed: false, closedMessage: "", waitlistEnabled: false };
+        let hasCloudData = false;
+
+        if (savedData) {
+          if (savedData.form_config && Array.isArray(savedData.form_config) && savedData.form_config.length > 0) {
+            loadedFields = savedData.form_config as FormField[];
+            hasCloudData = true;
+          }
+          if (savedData.form_settings) {
+            loadedSettings = {
+              isClosed: savedData.form_settings.isClosed || false,
+              closedMessage: savedData.form_settings.closedMessage || "",
+              waitlistEnabled: savedData.form_settings.waitlistEnabled || false
+            };
+          }
         }
+
+        // If no cloud data, try to recover from local storage
+        if (!hasCloudData && localSaved) {
+          try {
+            const parsed = JSON.parse(localSaved);
+            if (parsed.fields && Array.isArray(parsed.fields)) {
+              loadedFields = parsed.fields;
+            }
+            if (parsed.formSettings) {
+              loadedSettings = parsed.formSettings;
+            }
+          } catch (e) {}
+        }
+
+        setFields(loadedFields);
+        setLastSavedFields(JSON.stringify(loadedFields));
+        
+        setFormSettings(loadedSettings);
+        setLastSavedSettings(JSON.stringify(loadedSettings));
+        
       } catch (err) {
         console.error("Failed to load existing form config:", err);
       }
     }
     loadConfig();
   }, [resolvedParams.id]);
+
+  // Local Storage Backup
+  useEffect(() => {
+    if (!isMounted) return;
+    localStorage.setItem(`freo_builder_progress_${resolvedParams.id}`, JSON.stringify({
+      fields,
+      formSettings
+    }));
+  }, [fields, formSettings, isMounted, resolvedParams.id]);
+
+  // Auto-Save Cloud Sync
+  useEffect(() => {
+    if (!isMounted) return;
+    
+    const currentFieldsString = JSON.stringify(fields);
+    const currentSettingsString = JSON.stringify(formSettings);
+    
+    if (currentFieldsString === lastSavedFields && currentSettingsString === lastSavedSettings) return; // No changes to save
+
+    const timer = setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        await saveFormConfig(resolvedParams.id, fields, formSettings);
+        setLastSavedFields(currentFieldsString);
+        setLastSavedSettings(currentSettingsString);
+      } catch (err) {
+        console.error("Auto-save failed", err);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1500); // 1.5 second debounce
+
+    return () => clearTimeout(timer);
+  }, [fields, formSettings, isMounted, resolvedParams.id, lastSavedFields, lastSavedSettings]);
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -66,195 +146,447 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
     const newField: FormField = {
       id: `custom_${Date.now()}`,
       type: "text",
-      label: "New Field",
+      label: "New Question",
       placeholder: "",
       required: false,
       locked: false,
     };
     setFields([...fields, newField]);
+    setSelectedFieldId(newField.id);
   };
 
   const removeField = (id: string) => {
     setFields(fields.filter((f) => f.id !== id));
+    if (selectedFieldId === id) setSelectedFieldId(null);
   };
 
   const updateField = (id: string, updates: Partial<FormField>) => {
     setFields(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)));
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await saveFormConfig(resolvedParams.id, fields);
-    } catch (e) {
-      console.error(e);
-      setIsSaving(false);
-    }
-  };
+  if (!isMounted) return null;
 
-  if (!isMounted) return null; // Avoid hydration mismatch on DND
+  const selectedField = fields.find(f => f.id === selectedFieldId);
 
   return (
     <>
-      {/* Full-page loading overlay */}
-      {isSaving && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4 max-w-sm mx-4">
-            <Loader2 className="w-8 h-8 animate-spin text-[#1d1d1f]" />
-            <div className="text-center">
-              <p className="font-semibold text-[#1d1d1f] text-lg">Saving Form...</p>
-              <p className="text-sm text-[#86868b] mt-1">Please wait while your configuration is saved.</p>
+      <div className={`max-w-7xl mx-auto space-y-8 px-4 sm:px-6 lg:px-8 pb-12`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Link href={`/dashboard/events`}>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Advanced Form Builder</h1>
+              <p className="text-sm sm:text-base text-gray-500">Design your perfect registration experience.</p>
             </div>
           </div>
-        </div>
-      )}
-
-      <div className={`max-w-4xl mx-auto space-y-8 ${isSaving ? 'pointer-events-none opacity-60' : ''}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-          <Link href={`/dashboard/events`}>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <ArrowLeft className="w-5 h-5" />
+          <div className="flex flex-wrap gap-3 items-center">
+            {isSaving ? (
+              <span className="text-xs sm:text-sm font-medium text-blue-500 flex items-center bg-blue-50 px-3 py-1.5 rounded-full">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Syncing...
+              </span>
+            ) : (
+              <span className="text-xs sm:text-sm font-medium text-green-600 flex items-center bg-green-50 px-3 py-1.5 rounded-full">
+                <Save className="w-4 h-4 mr-2" />
+                Saved
+              </span>
+            )}
+            <Button variant="outline" onClick={addField} className="rounded-xl border-dashed border-gray-300">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Question
             </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Registration Form Builder</h1>
-            <p className="text-gray-500">Customize what information attendees need to provide.</p>
+            {isFirstTimeBuilder && (
+              <Link href={`/dashboard/events/${resolvedParams.id}`}>
+                <Button className="rounded-xl bg-black hover:bg-gray-800 text-white shadow-sm">
+                  Create Form
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={addField} className="rounded-xl border-dashed border-gray-300">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Custom Field
-          </Button>
-          <Button 
-            onClick={handleSave} 
-            disabled={isSaving}
-            className="bg-[#1d1d1f] hover:bg-[#2A2B31] text-[#DDFE55] font-semibold rounded-xl px-6 border border-[#1d1d1f]"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-            Save Form
-          </Button>
-        </div>
-      </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="form-fields">
-          {(provided) => (
-            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
-              {fields.map((field, index) => (
-                <Draggable key={field.id} draggableId={field.id} index={index}>
-                  {(provided, snapshot) => (
-                    <Card 
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      className={`border-gray-200 transition-shadow rounded-2xl ${snapshot.isDragging ? "shadow-lg ring-2 ring-primary/20 bg-gray-50" : "shadow-sm"}`}
-                    >
-                      <CardContent className="p-0 flex items-stretch">
-                        <div 
-                          {...provided.dragHandleProps} 
-                          className="w-12 border-r border-gray-100 flex items-center justify-center bg-gray-50/50 hover:bg-gray-100 transition-colors rounded-l-2xl cursor-grab active:cursor-grabbing"
-                        >
-                          <GripVertical className="text-gray-400 w-5 h-5" />
-                        </div>
-                        <div className="flex-1 p-6">
-                          <div className="flex flex-col md:flex-row gap-6">
-                            <div className="flex-1 space-y-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Field Label</Label>
-                                  <div className="relative">
-                                    <Input 
-                                      value={field.label} 
-                                      onChange={(e) => updateField(field.id, { label: e.target.value })}
-                                      disabled={field.locked}
-                                      className={`rounded-lg ${field.locked ? "bg-gray-50 text-gray-600 pl-9" : ""}`}
-                                    />
-                                    {field.locked && <Lock className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          {/* LEFT PANE: Editor (Draggable list) */}
+          <div className="lg:col-span-2 space-y-4">
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <Droppable droppableId="form-fields">
+                {(provided) => (
+                  <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3 min-h-[400px]">
+                    {fields.map((field, index) => (
+                      <Draggable key={field.id} draggableId={field.id} index={index}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            onClick={() => setSelectedFieldId(field.id)}
+                            className={`flex items-center group cursor-pointer transition-all duration-200 border rounded-2xl bg-white ${
+                              selectedFieldId === field.id 
+                                ? "border-blue-500 shadow-md ring-1 ring-blue-500" 
+                                : snapshot.isDragging 
+                                  ? "shadow-xl border-primary/20 scale-[1.02]" 
+                                  : "border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md"
+                            }`}
+                          >
+                            <div 
+                              {...provided.dragHandleProps} 
+                              className="p-4 border-r border-transparent flex items-center justify-center text-gray-300 group-hover:text-gray-500 transition-colors"
+                            >
+                              <GripVertical className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 p-4 pl-2 flex flex-col justify-center">
+                              {field.type === 'page_break' ? (
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1 border-b-2 border-dashed border-gray-300"></div>
+                                  <div className="mx-4 text-center">
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full">Page Break / Next Button</span>
                                   </div>
+                                  <div className="flex-1 border-b-2 border-dashed border-gray-300"></div>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Field Type</Label>
-                                  <Select 
-                                    value={field.type} 
-                                    onValueChange={(val) => { if (val) updateField(field.id, { type: val as FieldType }) }}
-                                    disabled={field.locked}
-                                  >
-                                    <SelectTrigger className={`rounded-lg ${field.locked ? "bg-gray-50 text-gray-600" : ""}`}>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="text">Short Text</SelectItem>
-                                      <SelectItem value="number">Number</SelectItem>
-                                      <SelectItem value="email">Email</SelectItem>
-                                      <SelectItem value="phone">Phone Number</SelectItem>
-                                      <SelectItem value="dropdown">Dropdown Options</SelectItem>
-                                      <SelectItem value="checkbox">Checkbox (Yes/No)</SelectItem>
-                                      <SelectItem value="file">File Upload</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                              ) : field.type === 'section_divider' ? (
+                                <div className="py-2">
+                                  <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                                    <h3 className="text-lg font-bold text-gray-900">{field.label || "Untitled Section"}</h3>
+                                    <span className="text-xs font-medium px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md">Section</span>
+                                  </div>
+                                  {field.description && <p className="text-sm text-gray-500 mt-2">{field.description}</p>}
                                 </div>
-                              </div>
-
-                              {field.type !== 'checkbox' && field.type !== 'file' && (
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Placeholder Text</Label>
-                                  <Input 
-                                    value={field.placeholder || ""} 
-                                    onChange={(e) => updateField(field.id, { placeholder: e.target.value })}
-                                    disabled={field.locked}
-                                    placeholder="e.g. Enter your answer here..."
-                                    className={`rounded-lg ${field.locked ? "bg-gray-50 text-gray-600" : ""}`}
-                                  />
-                                </div>
-                              )}
-
-                              {field.type === 'dropdown' && (
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Options (Comma separated)</Label>
-                                  <Input 
-                                    value={field.options || ""} 
-                                    onChange={(e) => updateField(field.id, { options: e.target.value })}
-                                    placeholder="e.g. Option 1, Option 2, Option 3"
-                                    className="rounded-lg"
-                                  />
-                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-gray-900">{field.label || "Untitled Question"}</span>
+                                      {field.required && <span className="text-red-500 text-sm">*</span>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-medium px-2.5 py-1 bg-gray-100 text-gray-600 rounded-md capitalize">
+                                        {field.type.replace('_', ' ')}
+                                      </span>
+                                      {field.locked && <Lock className="w-4 h-4 text-gray-400" />}
+                                    </div>
+                                  </div>
+                                  {field.description && (
+                                    <p className="text-sm text-gray-500 mt-1 truncate">{field.description}</p>
+                                  )}
+                                </>
                               )}
                             </div>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+            
+            <button
+              onClick={addField}
+              className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-500 font-medium hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 transition-all flex items-center justify-center"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Add new question
+            </button>
 
-                            <div className="w-full md:w-48 flex flex-col justify-between pt-6">
-                              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                <Label className="text-sm font-medium text-gray-700 cursor-pointer">Required</Label>
-                                <Switch 
-                                  checked={field.required}
-                                  onCheckedChange={(checked) => updateField(field.id, { required: checked })}
-                                  disabled={field.locked}
-                                />
-                              </div>
-                              
-                              {!field.locked && (
-                                <Button 
-                                  variant="ghost" 
-                                  onClick={() => removeField(field.id)}
-                                  className="text-red-500 hover:text-red-600 hover:bg-red-50 w-full mt-4 rounded-xl"
+            {/* Visual Indicator for the end of the form */}
+            <div className="mt-8 p-6 bg-white border border-gray-100 rounded-2xl shadow-sm flex items-center justify-between opacity-60">
+              <div className="text-sm text-gray-500 font-medium tracking-wide uppercase">End of Form</div>
+              <Button disabled className="rounded-xl px-8 h-12 bg-black text-white cursor-not-allowed">
+                {fields.length > 0 && fields[fields.length - 1].type === "page_break" 
+                  ? "Next Page" 
+                  : "Submit Registration"}
+              </Button>
+            </div>
+          </div>
+
+          {/* RIGHT PANE: Properties */}
+          <div className="col-span-1 lg:sticky lg:top-6">
+            <Card className="rounded-2xl border-gray-200 shadow-xl overflow-hidden bg-white/50 backdrop-blur-xl">
+              <CardContent className="p-0">
+                {selectedField ? (
+                  <div className="flex flex-col h-full">
+                    <div className="p-4 border-b border-gray-100 bg-white flex items-center gap-2">
+                      <Settings2 className="w-5 h-5 text-blue-500" />
+                      <h3 className="font-bold text-gray-900">Field Properties</h3>
+                    </div>
+                    
+                    <div className="p-6 space-y-6 bg-gray-50/30">
+                      <div className="space-y-3">
+                        <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Field Label</Label>
+                        <Input 
+                          value={selectedField.label} 
+                          onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+                          disabled={selectedField.locked}
+                          className="bg-white"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Field Type</Label>
+                        <Select 
+                          value={selectedField.type} 
+                          onValueChange={(val) => { if (val) updateField(selectedField.id, { type: val as FieldType }) }}
+                          disabled={selectedField.locked}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">Short Text</SelectItem>
+                            <SelectItem value="long_text">Paragraph Text</SelectItem>
+                            <SelectItem value="email">Email</SelectItem>
+                            <SelectItem value="phone">Phone Number</SelectItem>
+                            <SelectItem value="number">Number</SelectItem>
+                            <SelectItem value="dropdown">Dropdown</SelectItem>
+                            <SelectItem value="radio">Multiple Choice (Radio)</SelectItem>
+                            <SelectItem value="checkbox">Checkboxes</SelectItem>
+                            <SelectItem value="date">Date Picker</SelectItem>
+                            <SelectItem value="time">Time Picker</SelectItem>
+                            <SelectItem value="rating">Rating (1-5)</SelectItem>
+                            <SelectItem value="linear_scale">Linear Scale (1-10)</SelectItem>
+                            <SelectItem value="file_upload">File Upload</SelectItem>
+                            <SelectItem value="checkbox_grid">Checkbox Grid</SelectItem>
+                            <SelectItem value="section_divider">Section Divider</SelectItem>
+                            <SelectItem value="page_break">Page Break</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {!['section_divider', 'page_break'].includes(selectedField.type) && (
+                        <div className="space-y-3">
+                          <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Description (Optional)</Label>
+                          <Input 
+                            value={selectedField.description || ""} 
+                            onChange={(e) => updateField(selectedField.id, { description: e.target.value })}
+                            disabled={selectedField.locked}
+                            placeholder="Help text for the user"
+                            className="bg-white"
+                          />
+                        </div>
+                      )}
+
+                      {['text', 'long_text', 'number', 'email', 'phone'].includes(selectedField.type) && (
+                        <div className="space-y-3">
+                          <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Placeholder Text</Label>
+                          <Input 
+                            value={selectedField.placeholder || ""} 
+                            onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })}
+                            disabled={selectedField.locked}
+                            placeholder="e.g. Enter your answer..."
+                            className="bg-white"
+                          />
+                        </div>
+                      )}
+
+                      {['dropdown', 'radio', 'checkbox'].includes(selectedField.type) && (
+                        <div className="space-y-3">
+                          <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Options (Comma separated)</Label>
+                          <Input 
+                            value={selectedField.options || ""} 
+                            onChange={(e) => updateField(selectedField.id, { options: e.target.value })}
+                            placeholder="Option 1, Option 2, Option 3"
+                            className="bg-white"
+                          />
+                        </div>
+                      )}
+
+                      {selectedField.type === 'checkbox_grid' && (
+                        <div className="space-y-4">
+                          <div className="space-y-3">
+                            <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Rows (Comma separated)</Label>
+                            <Input 
+                              value={selectedField.gridRows || ""} 
+                              onChange={(e) => updateField(selectedField.id, { gridRows: e.target.value })}
+                              placeholder="Row 1, Row 2, Row 3"
+                              className="bg-white"
+                            />
+                          </div>
+                          <div className="space-y-3">
+                            <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Columns (Comma separated)</Label>
+                            <Input 
+                              value={selectedField.options || ""} 
+                              onChange={(e) => updateField(selectedField.id, { options: e.target.value })}
+                              placeholder="Column 1, Column 2, Column 3"
+                              className="bg-white"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedField.type === 'file_upload' && (
+                        <div className="space-y-3">
+                          <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Accepted File Types (Comma separated)</Label>
+                          <Input 
+                            value={selectedField.options || ""} 
+                            onChange={(e) => updateField(selectedField.id, { options: e.target.value })}
+                            placeholder="e.g. .jpg, .png, .pdf, image/*"
+                            className="bg-white"
+                          />
+                        </div>
+                      )}
+
+                      {!['section_divider', 'page_break'].includes(selectedField.type) && (
+                        <div className="pt-4 border-t border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label className="text-sm font-semibold text-gray-900">Required Field</Label>
+                              <p className="text-xs text-gray-500">User must answer this question.</p>
+                            </div>
+                            <Switch 
+                              checked={selectedField.required}
+                              onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })}
+                              disabled={selectedField.locked}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {!selectedField.locked && (
+                        <div className="pt-4 border-t border-gray-200 space-y-4">
+                          <div>
+                            <Label className="text-sm font-semibold text-gray-900">Conditional Logic</Label>
+                            <p className="text-xs text-gray-500 mb-3">Show this field only when a condition is met.</p>
+                            
+                            <div className="space-y-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                              <div className="space-y-2">
+                                <Label className="text-xs font-medium text-gray-500">Depends On (Field)</Label>
+                                <Select
+                                  value={selectedField.logic?.dependsOn || "none"}
+                                  onValueChange={(val) => {
+                                    if (val === "none") {
+                                      const newLogic = { ...selectedField.logic };
+                                      delete newLogic.dependsOn;
+                                      if (Object.keys(newLogic).length === 0) updateField(selectedField.id, { logic: undefined });
+                                      else updateField(selectedField.id, { logic: newLogic });
+                                    } else {
+                                      updateField(selectedField.id, { logic: { ...selectedField.logic, dependsOn: val, condition: selectedField.logic?.condition || "equals", value: selectedField.logic?.value || "" } });
+                                    }
+                                  }}
                                 >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Remove Field
-                                </Button>
+                                  <SelectTrigger className="bg-gray-50">
+                                    <SelectValue placeholder="Select field" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Always Show</SelectItem>
+                                    {fields.filter(f => f.id !== selectedField.id && ['dropdown', 'radio', 'checkbox'].includes(f.type)).map(f => (
+                                      <SelectItem key={f.id} value={f.id}>{f.label || 'Untitled'}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              {selectedField.logic?.dependsOn && (
+                                <>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs font-medium text-gray-500">Condition</Label>
+                                    <Select
+                                      value={selectedField.logic?.condition || "equals"}
+                                      onValueChange={(val) => updateField(selectedField.id, { logic: { ...selectedField.logic, condition: val } })}
+                                    >
+                                      <SelectTrigger className="bg-gray-50">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="equals">Equals</SelectItem>
+                                        <SelectItem value="not_equals">Does Not Equal</SelectItem>
+                                        <SelectItem value="contains">Contains</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs font-medium text-gray-500">Value</Label>
+                                    <Input 
+                                      value={selectedField.logic?.value || ""}
+                                      onChange={(e) => updateField(selectedField.id, { logic: { ...selectedField.logic, value: e.target.value } })}
+                                      placeholder="e.g. Yes"
+                                      className="bg-gray-50"
+                                    />
+                                  </div>
+                                </>
                               )}
                             </div>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </Draggable>
-              ))}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
-      </DragDropContext>
+                      )}
+
+                      {!selectedField.locked && (
+                        <div className="pt-6">
+                          <Button 
+                            variant="destructive" 
+                            onClick={() => removeField(selectedField.id)}
+                            className="w-full rounded-xl"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Field
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col h-full">
+                    <div className="p-4 border-b border-gray-100 bg-white flex items-center gap-2">
+                      <Settings2 className="w-5 h-5 text-blue-500" />
+                      <h3 className="font-bold text-gray-900">Form Settings</h3>
+                    </div>
+                    
+                    <div className="p-6 space-y-6 bg-gray-50/30">
+                      <div className="space-y-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <Label className="text-sm font-semibold text-gray-900">Close Form</Label>
+                            <p className="text-xs text-gray-500 mt-1 max-w-[200px]">Stop accepting new responses immediately.</p>
+                          </div>
+                          <Switch 
+                            checked={formSettings.isClosed}
+                            onCheckedChange={(checked) => setFormSettings({ ...formSettings, isClosed: checked })}
+                          />
+                        </div>
+                      </div>
+
+                      {formSettings.isClosed && (
+                        <div className="space-y-3 pt-4 border-t border-gray-200">
+                          <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Closure Message</Label>
+                          <Input 
+                            value={formSettings.closedMessage} 
+                            onChange={(e) => setFormSettings({ ...formSettings, closedMessage: e.target.value })}
+                            placeholder="e.g. This form is no longer accepting responses."
+                            className="bg-white"
+                          />
+                          <p className="text-xs text-gray-500">Displayed to users when they visit the form.</p>
+                        </div>
+                      )}
+
+                      <div className="space-y-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <Label className="text-sm font-semibold text-gray-900">Waitlist System</Label>
+                            <p className="text-xs text-gray-500 mt-1 max-w-[200px]">Allow users to join waitlist when event is full.</p>
+                          </div>
+                          <Switch 
+                            checked={formSettings.waitlistEnabled}
+                            onCheckedChange={(checked) => setFormSettings({ ...formSettings, waitlistEnabled: checked })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-6 mt-6 border-t border-gray-200">
+                        <div className="p-8 text-center text-gray-400 flex flex-col items-center justify-center">
+                          <p className="font-medium text-gray-500">Select a field to edit its properties</p>
+                          <p className="text-sm mt-1">Click any field on the left to edit it here.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </>
   );
