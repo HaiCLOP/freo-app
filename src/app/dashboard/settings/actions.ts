@@ -3,6 +3,23 @@
 import { createClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+
+export async function updateCreatorName(formData: FormData) {
+  const name = formData.get("name") as string;
+  if (!name || name.trim().length < 2) return;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("creators")
+    .update({ name: name.trim() })
+    .eq("id", user.id);
+
+  revalidatePath("/dashboard/settings");
+}
 
 export async function connectGoogleAccount() {
   const supabase = await createClient();

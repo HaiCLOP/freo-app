@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle2, AlertCircle, HardDrive, Sheet, ShieldCheck, Unlink } from "lucide-react";
 import Link from "next/link";
-import { connectGoogleAccount, disconnectGoogleAccount } from "./actions";
+import { connectGoogleAccount, disconnectGoogleAccount, updateCreatorName } from "./actions";
 import { SubmitButton } from "@/components/submit-button";
+import { Input } from "@/components/ui/input";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -69,8 +70,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <CardContent>
           <div className="space-y-4">
             <div className="flex items-center justify-between py-3 border-b border-[#f5f5f7]">
-              <span className="text-sm font-medium text-[#86868b]">Name</span>
-              <span className="text-sm font-semibold text-[#1d1d1f]">{creator?.name}</span>
+              <div className="w-full">
+                <form action={updateCreatorName} className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-[#86868b] block mb-2">Name</span>
+                    <Input id="name" name="name" defaultValue={creator?.name} required className="rounded-xl bg-gray-50/50 max-w-sm" />
+                  </div>
+                  <div className="mt-7">
+                    <SubmitButton text="Save Name" />
+                  </div>
+                </form>
+              </div>
             </div>
             <div className="flex items-center justify-between py-3">
               <span className="text-sm font-medium text-[#86868b]">Email</span>

@@ -6,6 +6,23 @@ import { sendEmail } from "@/lib/email";
 import { updateRowStatusInSheet } from "@/lib/google-sheets";
 import crypto from "crypto";
 
+export async function updateEventName(eventId: string, formData: FormData) {
+  const name = formData.get("name") as string;
+  if (!name || name.trim().length < 2) return;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("events")
+    .update({ name: name.trim() })
+    .eq("id", eventId)
+    .eq("creator_id", user.id);
+
+  revalidatePath(`/dashboard/events/${eventId}/registrations`);
+}
+
 export async function approveRegistration(registrationId: string, eventId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
