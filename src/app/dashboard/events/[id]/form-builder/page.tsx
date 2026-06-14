@@ -75,16 +75,19 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
         }
 
         // If no cloud data, try to recover from local storage
-        if (!hasCloudData && localSaved) {
-          try {
-            const parsed = JSON.parse(localSaved);
-            if (parsed.fields && Array.isArray(parsed.fields)) {
-              loadedFields = parsed.fields;
-            }
-            if (parsed.formSettings) {
-              loadedSettings = parsed.formSettings;
-            }
-          } catch (e) {}
+        if (!hasCloudData) {
+          setIsFirstTimeBuilder(true);
+          if (localSaved) {
+            try {
+              const parsed = JSON.parse(localSaved);
+              if (parsed.fields && Array.isArray(parsed.fields)) {
+                loadedFields = parsed.fields;
+              }
+              if (parsed.formSettings) {
+                loadedSettings = parsed.formSettings;
+              }
+            } catch (e) {}
+          }
         }
 
         setFields(loadedFields);
@@ -200,7 +203,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
               Add Question
             </Button>
             {isFirstTimeBuilder && (
-              <Link href={`/dashboard/events/${resolvedParams.id}`}>
+              <Link href={`/dashboard/events/${resolvedParams.id}/registrations`}>
                 <Button className="rounded-xl bg-black hover:bg-gray-800 text-white shadow-sm">
                   Create Form
                 </Button>
