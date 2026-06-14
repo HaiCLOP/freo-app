@@ -4,14 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle, XCircle, Search, Clock, ExternalLink } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Search, Clock, ExternalLink, IndianRupee } from "lucide-react";
 import Link from "next/link";
-import { approveRegistration, rejectRegistration, updateEventName } from "./actions";
+import { approveRegistration, rejectRegistration, updateEventDetails } from "./actions";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/submit-button";
 import { getFileUrls } from "@/lib/storage";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,10 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
   const approvedRegistrations = registrations?.filter(r => r.status === 'approved').length || 0;
   const waitlistedRegistrations = registrations?.filter(r => r.status === 'waitlisted').length || 0;
 
+  // Format date for datetime-local input
+  const eventDateObj = new Date(event.date);
+  const localDateStr = new Date(eventDateObj.getTime() - (eventDateObj.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-10 animate-in fade-in duration-700">
       {/* Header */}
@@ -87,19 +92,50 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                     <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
                   </svg>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Edit Event Details</DialogTitle>
                     <DialogDescription>
                       Update the public details of your event. This will be reflected immediately.
                     </DialogDescription>
                   </DialogHeader>
-                  <form action={updateEventName.bind(null, event.id)}>
+                  <form action={updateEventDetails.bind(null, event.id)}>
                     <div className="py-4 space-y-4">
                       <div>
                         <Label htmlFor="name" className="text-sm font-medium text-gray-700">Event Name</Label>
-                        <Input id="name" name="name" defaultValue={event.name} required className="mt-2 rounded-xl bg-gray-50/50" />
+                        <Input id="name" name="name" defaultValue={event.name} required className="mt-1.5 rounded-xl bg-gray-50/50" />
                       </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="date" className="text-sm font-medium text-gray-700">Date & Time</Label>
+                          <Input id="date" name="date" type="datetime-local" defaultValue={localDateStr} required className="mt-1.5 rounded-xl bg-gray-50/50" />
+                        </div>
+                        <div>
+                          <Label htmlFor="venue" className="text-sm font-medium text-gray-700">Venue</Label>
+                          <Input id="venue" name="venue" defaultValue={event.venue} required className="mt-1.5 rounded-xl bg-gray-50/50" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="price" className="text-sm font-medium text-gray-700">Ticket Price (INR)</Label>
+                          <div className="relative mt-1.5">
+                            <IndianRupee className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                            <Input id="price" name="price" type="number" min="0" step="1" defaultValue={event.price} required className="pl-9 rounded-xl bg-gray-50/50" />
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="max_capacity" className="text-sm font-medium text-gray-700">Maximum Capacity</Label>
+                          <Input id="max_capacity" name="max_capacity" type="number" min="1" defaultValue={event.max_capacity} required className="mt-1.5 rounded-xl bg-gray-50/50" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="description" className="text-sm font-medium text-gray-700">Description</Label>
+                        <Textarea id="description" name="description" defaultValue={event.description} required className="mt-1.5 rounded-xl bg-gray-50/50 min-h-[100px]" />
+                      </div>
+
                       <div>
                         <Label htmlFor="organizer_name" className="text-sm font-medium text-gray-700">
                           Custom Organizer Name <span className="text-gray-400 font-normal">(Optional)</span>
@@ -109,7 +145,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                           name="organizer_name" 
                           defaultValue={event.organizer_name || ""} 
                           placeholder="Overrides the default creator name"
-                          className="mt-2 rounded-xl bg-gray-50/50" 
+                          className="mt-1.5 rounded-xl bg-gray-50/50" 
                         />
                       </div>
                     </div>

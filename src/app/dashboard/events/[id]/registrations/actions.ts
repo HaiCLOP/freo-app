@@ -6,9 +6,14 @@ import { sendEmail } from "@/lib/email";
 import { updateRowStatusInSheet } from "@/lib/google-sheets";
 import crypto from "crypto";
 
-export async function updateEventName(eventId: string, formData: FormData) {
+export async function updateEventDetails(eventId: string, formData: FormData) {
   const name = formData.get("name") as string;
   const organizer_name = formData.get("organizer_name") as string;
+  const venue = formData.get("venue") as string;
+  const price = formData.get("price") as string;
+  const max_capacity = formData.get("max_capacity") as string;
+  const dateStr = formData.get("date") as string;
+  const description = formData.get("description") as string;
   
   if (!name || name.trim().length < 2) return;
 
@@ -16,16 +21,25 @@ export async function updateEventName(eventId: string, formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const updateData: any = { 
+    name: name.trim(),
+    organizer_name: organizer_name ? organizer_name.trim() : null
+  };
+
+  if (venue) updateData.venue = venue.trim();
+  if (price) updateData.price = parseFloat(price);
+  if (max_capacity) updateData.max_capacity = parseInt(max_capacity, 10);
+  if (dateStr) updateData.date = new Date(dateStr).toISOString();
+  if (description) updateData.description = description.trim();
+
   await supabase
     .from("events")
-    .update({ 
-      name: name.trim(),
-      organizer_name: organizer_name ? organizer_name.trim() : null
-    })
+    .update(updateData)
     .eq("id", eventId)
     .eq("creator_id", user.id);
 
   revalidatePath(`/dashboard/events/${eventId}/registrations`);
+  revalidatePath(`/dashboard`);
 }
 
 export async function approveRegistration(registrationId: string, eventId: string) {
