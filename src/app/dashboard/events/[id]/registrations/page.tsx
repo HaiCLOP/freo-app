@@ -13,6 +13,7 @@ import { getFileUrls } from "@/lib/storage";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { PaymentScreenshot } from "@/components/dashboard/payment-screenshot";
 import {
   Dialog,
   DialogContent,
@@ -277,23 +278,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
 
                       return (
                         <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
-                          {/* Use standard img tag instead of next/image to avoid unconfigured host errors for google drive */}
-                          <img 
-                            src={displayUrl}
-                            alt="Payment Screenshot"
-                            className="object-cover w-full h-full hover:opacity-80 transition-opacity"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                              e.currentTarget.nextElementSibling?.classList.add('flex');
-                            }}
-                          />
-                          <div className="hidden w-full h-full flex-col items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
-                            <svg className="w-6 h-6 mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-                            </svg>
-                            <span className="text-[10px] font-bold text-center uppercase tracking-wider">Open<br/>Link</span>
-                          </div>
+                          <PaymentScreenshot src={displayUrl} />
                         </a>
                       );
                     })()}
