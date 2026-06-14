@@ -8,8 +8,6 @@ CREATE OR REPLACE FUNCTION register_for_event(
     p_full_name TEXT,
     p_phone TEXT,
     p_email TEXT,
-    p_herbalife_id TEXT,
-    p_sponsor_name TEXT,
     p_utr_id TEXT,
     p_payment_screenshot_url TEXT,
     p_custom_fields JSONB,
@@ -47,9 +45,9 @@ BEGIN
 
     -- Insert registration atomically
     INSERT INTO registrations (
-        event_id, full_name, phone, email, herbalife_id, sponsor_name, utr_id, payment_screenshot_url, custom_fields, status
+        event_id, full_name, phone, email, utr_id, payment_screenshot_url, custom_fields, status
     ) VALUES (
-        p_event_id, p_full_name, p_phone, p_email, p_herbalife_id, p_sponsor_name, p_utr_id, p_payment_screenshot_url, p_custom_fields, v_status
+        p_event_id, p_full_name, p_phone, p_email, p_utr_id, p_payment_screenshot_url, p_custom_fields, v_status
     ) RETURNING * INTO v_registration;
 
     RETURN row_to_json(v_registration)::jsonb;
