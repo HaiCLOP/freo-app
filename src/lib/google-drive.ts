@@ -247,16 +247,21 @@ export async function getDriveImageUrl(
     // First check if the file is publicly shared
     const file = await drive.files.get({
       fileId: fileIdOrUrl,
-      fields: "id, shared, webContentLink",
+      fields: "id, shared, webContentLink, webViewLink, thumbnailLink",
     });
 
-    if (file.data.shared) {
-      return `https://drive.google.com/uc?id=${fileIdOrUrl}&export=view`;
+    if (file.data.shared && file.data.webContentLink) {
+      return file.data.webContentLink;
     }
 
-    // Removed insecure public permission creation.
-    // Instead, return the secure web view link which requires the creator
-    // to be logged into their Google account. This prevents PII leakage.
+    // It's private. The webViewLink requires auth and won't work in an <img> tag.
+    // The thumbnailLink does NOT require auth. We can increase its size parameter.
+    if (file.data.thumbnailLink) {
+      // Remove the default =s220 size parameter and make it larger
+      return file.data.thumbnailLink.replace(/=s\d+$/, "=s1000");
+    }
+
+    // Fallback to webViewLink if thumbnail is somehow missing
     return file.data.webViewLink || `https://drive.google.com/file/d/${fileIdOrUrl}/view`;
   } catch (error) {
     console.error("Failed to get Drive image URL:", error);
