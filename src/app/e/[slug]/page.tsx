@@ -146,7 +146,7 @@ export default async function PublicEventPage({ params, searchParams }: { params
         <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 max-w-4xl mx-auto">
           <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 tracking-tight">{event.name}</h1>
           <p className="text-white/80 font-medium flex items-center gap-2">
-            Organized by {(event.creators as any)?.name || "Creator"}
+            Organized by {event.organizer_name || (event.creators as any)?.name || "Creator"}
           </p>
         </div>
       </div>

@@ -8,6 +8,8 @@ import crypto from "crypto";
 
 export async function updateEventName(eventId: string, formData: FormData) {
   const name = formData.get("name") as string;
+  const organizer_name = formData.get("organizer_name") as string;
+  
   if (!name || name.trim().length < 2) return;
 
   const supabase = await createClient();
@@ -16,7 +18,10 @@ export async function updateEventName(eventId: string, formData: FormData) {
 
   await supabase
     .from("events")
-    .update({ name: name.trim() })
+    .update({ 
+      name: name.trim(),
+      organizer_name: organizer_name ? organizer_name.trim() : null
+    })
     .eq("id", eventId)
     .eq("creator_id", user.id);
 

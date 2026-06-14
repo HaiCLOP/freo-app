@@ -82,28 +82,40 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
             <div className="flex items-center gap-2 mt-1">
               <p className="text-[#86868b] text-lg font-medium">{event.name}</p>
               <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#86868b] hover:text-[#1d1d1f] rounded-full">
-                    <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-                    </svg>
-                  </Button>
+                <DialogTrigger render={<Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#86868b] hover:text-[#1d1d1f] rounded-full" />}>
+                  <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                  </svg>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
                   <DialogHeader>
-                    <DialogTitle>Edit Event Name</DialogTitle>
+                    <DialogTitle>Edit Event Details</DialogTitle>
                     <DialogDescription>
-                      Update the public name of your event. This will be reflected immediately.
+                      Update the public details of your event. This will be reflected immediately.
                     </DialogDescription>
                   </DialogHeader>
                   <form action={updateEventName.bind(null, event.id)}>
-                    <div className="py-4">
-                      <Label htmlFor="name" className="text-sm font-medium text-gray-700">Event Name</Label>
-                      <Input id="name" name="name" defaultValue={event.name} required className="mt-2 rounded-xl bg-gray-50/50" />
+                    <div className="py-4 space-y-4">
+                      <div>
+                        <Label htmlFor="name" className="text-sm font-medium text-gray-700">Event Name</Label>
+                        <Input id="name" name="name" defaultValue={event.name} required className="mt-2 rounded-xl bg-gray-50/50" />
+                      </div>
+                      <div>
+                        <Label htmlFor="organizer_name" className="text-sm font-medium text-gray-700">
+                          Custom Organizer Name <span className="text-gray-400 font-normal">(Optional)</span>
+                        </Label>
+                        <Input 
+                          id="organizer_name" 
+                          name="organizer_name" 
+                          defaultValue={event.organizer_name || ""} 
+                          placeholder="Overrides the default creator name"
+                          className="mt-2 rounded-xl bg-gray-50/50" 
+                        />
+                      </div>
                     </div>
                     <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline" className="rounded-xl">Cancel</Button>
+                      <DialogClose render={<Button type="button" variant="outline" className="rounded-xl" />}>
+                        Cancel
                       </DialogClose>
                       <SubmitButton text="Save Changes" />
                     </DialogFooter>
