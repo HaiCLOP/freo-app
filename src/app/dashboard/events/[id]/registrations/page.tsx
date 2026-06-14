@@ -117,7 +117,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                       <DialogClose render={<Button type="button" variant="outline" className="rounded-xl" />}>
                         Cancel
                       </DialogClose>
-                      <SubmitButton text="Save Changes" />
+                      <SubmitButton pendingText="Saving..." className="rounded-xl">Save Changes</SubmitButton>
                     </DialogFooter>
                   </form>
                 </DialogContent>

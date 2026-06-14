@@ -77,7 +77,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <Input id="name" name="name" defaultValue={creator?.name} required className="rounded-xl bg-gray-50/50 max-w-sm" />
                   </div>
                   <div className="mt-7">
-                    <SubmitButton text="Save Name" />
+                    <SubmitButton pendingText="Saving..." className="rounded-xl">Save Name</SubmitButton>
                   </div>
                 </form>
               </div>
