@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Plus, Settings2, Share, Copy } from "lucide-react";
+import { Plus, Settings2, Share, Copy, Pencil } from "lucide-react";
 import { DeleteEventButton } from "@/components/dashboard/delete-event-button";
 
 export default async function EventsPage() {
@@ -87,6 +87,11 @@ export default async function EventsPage() {
                     </td>
                     <td className="py-5 px-7 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link href={`/dashboard/events/${event.id}/edit`}>
+                          <button className="w-8 h-8 rounded-full flex items-center justify-center text-[#86868b] hover:text-[#1d1d1f] hover:bg-white border border-transparent hover:border-[#e5e5ea] transition-all" title="Edit Event Details">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        </Link>
                         <Link href={`/dashboard/events/${event.id}/form-builder`}>
                           <button className="w-8 h-8 rounded-full flex items-center justify-center text-[#86868b] hover:text-[#1d1d1f] hover:bg-white border border-transparent hover:border-[#e5e5ea] transition-all" title="Edit Form">
                             <Settings2 className="w-4 h-4" />
