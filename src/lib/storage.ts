@@ -5,7 +5,7 @@
  * 
  * This lets creators start free and simply connect Google for unlimited storage.
  */
-
+import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 

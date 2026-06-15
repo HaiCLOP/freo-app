@@ -6,6 +6,7 @@ import { uploadFile, getFileUrl } from "@/lib/storage";
 import { sendEmail } from "@/lib/email";
 import { z } from "zod";
 import { headers } from "next/headers";
+import { rateLimit } from "@/lib/rate-limit";
 
 const registrationSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name is too long"),
@@ -14,10 +15,7 @@ const registrationSchema = z.object({
   utr_id: z.string().min(4, "UTR is too short").max(50, "UTR is too long"),
 });
 
-// Simple in-memory rate limiter (resets on serverless cold starts)
-const rateLimitMap = new Map<string, { count: number; timestamp: number }>();
-const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 5;
+// We now use the centralized Upstash Redis rate limiter imported above.
 
 export async function submitRegistration(eventId: string, eventSlug: string, formData: FormData) {
   // Rate Limiting Check
@@ -25,21 +23,11 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   const ip = headersList.get("x-forwarded-for") || "unknown";
   
   if (ip !== "unknown") {
-    const now = Date.now();
-    const windowStart = now - RATE_LIMIT_WINDOW_MS;
-    const ipData = rateLimitMap.get(ip) || { count: 0, timestamp: now };
-    
-    if (ipData.timestamp < windowStart) {
-      ipData.count = 1;
-      ipData.timestamp = now;
-    } else {
-      ipData.count++;
-      if (ipData.count > MAX_REQUESTS_PER_WINDOW) {
-        console.warn(`Rate limit exceeded for IP: ${ip}`);
-        redirect(`/e/${eventSlug}?error=rate_limited`);
-      }
+    const { allowed } = await rateLimit(`submit_${ip}`, 5, 60_000); // 5 attempts per minute
+    if (!allowed) {
+      console.warn(`Rate limit exceeded for IP: ${ip}`);
+      redirect(`/e/${eventSlug}?error=rate_limited`);
     }
-    rateLimitMap.set(ip, ipData);
   }
 
   const supabase = await createClient();
@@ -231,7 +219,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
               url = `https://drive.google.com/uc?export=view&id=${match[1]}`;
             }
           }
-          publicScreenshotUrl = `=IMAGE("${url}")`;
+          publicScreenshotUrl = `=HYPERLINK("${url}", "View Screenshot")`;
         } else {
           publicScreenshotUrl = "Image upload pending";
         }

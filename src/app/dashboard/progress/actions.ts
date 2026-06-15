@@ -12,7 +12,7 @@ export async function sendVerificationEmail(formData: FormData) {
   const ip = headersList.get("x-forwarded-for") || "unknown";
   
   if (ip !== "unknown") {
-    const { allowed } = rateLimit(`email_verify_${ip}`, 3, 60_000); // Max 3 emails per minute
+    const { allowed } = await rateLimit(`email_verify_${ip}`, 3, 60_000); // Max 3 emails per minute
     if (!allowed) {
       redirect("/dashboard/progress?error=rate_limited");
     }

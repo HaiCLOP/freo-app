@@ -11,7 +11,7 @@ export async function register(formData: FormData) {
   const ip = headersList.get("x-forwarded-for") || "unknown";
   
   if (ip !== "unknown") {
-    const { allowed } = rateLimit(`register_${ip}`, 5, 60_000); // 5 attempts per minute
+    const { allowed } = await rateLimit(`register_${ip}`, 5, 60_000); // 5 attempts per minute
     if (!allowed) {
       return redirect("/register?error=Too many registration attempts. Please try again later.");
     }

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle, XCircle, Search, Clock, ExternalLink, IndianRupee } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Search, Clock, ExternalLink, IndianRupee, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { approveRegistration, rejectRegistration, updateEventDetails } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PaymentScreenshot } from "@/components/dashboard/payment-screenshot";
+import { ExportCsvButton } from "@/components/dashboard/export-csv-button";
+import { RealtimeRegistrations } from "@/components/dashboard/realtime-registrations";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +70,11 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
   const pendingRegistrations = registrations?.filter(r => r.status === 'pending').length || 0;
   const approvedRegistrations = registrations?.filter(r => r.status === 'approved').length || 0;
   const waitlistedRegistrations = registrations?.filter(r => r.status === 'waitlisted').length || 0;
+
+  const ticketPrice = event.price || 0;
+  const collectedRevenue = approvedRegistrations * ticketPrice;
+  const pendingRevenue = pendingRegistrations * ticketPrice;
+  const projectedRevenue = (approvedRegistrations + pendingRegistrations) * ticketPrice;
 
   // Format date for datetime-local input
   const eventDateObj = new Date(event.date);
@@ -225,11 +232,49 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
         </Card>
       </div>
 
+      <RealtimeRegistrations eventId={event.id} />
+
+      {/* Revenue Dashboard */}
+      {ticketPrice > 0 && (
+        <div className="bg-white rounded-[24px] border border-[#f5f5f7] shadow-sm p-7">
+          <h2 className="text-xl font-semibold tracking-tight text-[#1d1d1f] mb-6 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-500" />
+            Revenue Dashboard
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <p className="text-[13px] font-medium text-[#86868b] uppercase tracking-wider mb-2">Collected</p>
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-6 h-6 text-[#34c759]" />
+                <span className="text-3xl font-semibold text-[#1d1d1f]">{collectedRevenue.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-[13px] font-medium text-[#86868b] uppercase tracking-wider mb-2">Pending</p>
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-6 h-6 text-[#ffcc00]" />
+                <span className="text-3xl font-semibold text-[#1d1d1f]">{pendingRevenue.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-[13px] font-medium text-[#86868b] uppercase tracking-wider mb-2">Projected</p>
+              <div className="flex items-center gap-2">
+                <IndianRupee className="w-6 h-6 text-[#0066cc]" />
+                <span className="text-3xl font-semibold text-[#1d1d1f]">{projectedRevenue.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Registrations List */}
       <div className="space-y-6 pt-4">
-        <div className="flex items-center justify-between px-2">
-          <h2 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">All Registrations</h2>
-          <span className="text-[#86868b] text-[15px] font-medium">Review and process payments</span>
+        <div className="flex flex-col md:flex-row md:items-center justify-between px-2 gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">All Registrations</h2>
+            <p className="text-[#86868b] text-[15px] font-medium">Review and process payments</p>
+          </div>
+          <ExportCsvButton data={registrations || []} eventName={event.name} />
         </div>
 
         <div className="bg-white rounded-[24px] border border-[#f5f5f7] shadow-sm overflow-hidden">

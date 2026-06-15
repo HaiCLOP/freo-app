@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const ip = headersList.get("x-forwarded-for") || "unknown";
   
   if (ip !== "unknown") {
-    const { allowed } = rateLimit(`verify_endpoint_${ip}`, 10, 60_000); // 10 attempts per minute
+    const { allowed } = await rateLimit(`verify_endpoint_${ip}`, 10, 60_000); // 10 attempts per minute
     if (!allowed) {
       return NextResponse.redirect(new URL("/dashboard/progress?error=rate_limited", request.url));
     }

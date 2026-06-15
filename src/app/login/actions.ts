@@ -11,7 +11,7 @@ export async function login(formData: FormData) {
   const ip = headersList.get("x-forwarded-for") || "unknown";
   
   if (ip !== "unknown") {
-    const { allowed } = rateLimit(`login_${ip}`, 5, 60_000); // 5 attempts per minute
+    const { allowed } = await rateLimit(`login_${ip}`, 5, 60_000); // 5 attempts per minute
     if (!allowed) {
       return redirect("/login?error=Too many login attempts. Please try again later.");
     }
