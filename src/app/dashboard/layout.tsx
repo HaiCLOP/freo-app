@@ -11,7 +11,7 @@ import { LogoutButton } from "@/components/dashboard/logout-button";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: 'Dashboard | Freo',
+  title: 'Dashboard',
 };
 
 export default async function DashboardLayout({

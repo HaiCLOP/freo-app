@@ -6,7 +6,7 @@ import { Metadata } from "next";
 import { AnalyticsDashboard } from "./analytics-dashboard";
 
 export const metadata: Metadata = {
-  title: "Analytics | Freo",
+  title: "Analytics",
 };
 
 export default async function AnalyticsPage() {
