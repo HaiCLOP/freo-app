@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { appendRowToSheet } from "@/lib/google-sheets";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * Cron endpoint to process queued Google Sheets writes.
@@ -11,6 +12,12 @@ import { appendRowToSheet } from "@/lib/google-sheets";
  * Now resolves the creator's OAuth tokens for each sheet write.
  */
 export async function GET(request: Request) {
+  // SECURITY: Add rate limiting to prevent cron endpoint abuse
+  const { allowed } = await rateLimit("cron_sync_sheets", 10, 60_000); // 10 per minute max
+  if (!allowed) {
+    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  }
+
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
@@ -70,16 +77,24 @@ export async function GET(request: Request) {
       successCount++;
     } catch (error) {
       console.error(`Failed to process queue item ${claimed.id}:`, error);
+      
+      const currentRetry = claimed.retry_count || 0;
+      const nextRetry = currentRetry + 1;
+
       await supabase
         .from("sheet_queue")
         .update({
-          status: "failed",
+          status: nextRetry >= 3 ? "failed" : "pending",
+          retry_count: nextRetry,
           error_message: error instanceof Error ? error.message : "Unknown error",
           processed_at: new Date().toISOString(),
         })
         .eq("id", claimed.id);
       failCount++;
     }
+
+    // SECURITY: Sleep for 1 second between API calls to prevent exceeding Google Sheets 60 req/min quota
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   return NextResponse.json({
@@ -92,7 +107,7 @@ export async function GET(request: Request) {
 /**
  * Resolve which creator owns a given Google Sheet.
  */
-async function resolveCreatorId(supabase: any, sheetId: string): Promise<string> {
+async function resolveCreatorId(supabase: SupabaseClient, sheetId: string): Promise<string> {
   const { data: event } = await supabase
     .from("events")
     .select("creator_id")

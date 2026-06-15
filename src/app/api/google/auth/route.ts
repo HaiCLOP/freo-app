@@ -28,5 +28,16 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.set("access_type", "offline");
   authUrl.searchParams.set("prompt", "consent"); // Force consent to get refresh token
 
-  return NextResponse.redirect(authUrl.toString());
+  const state = crypto.randomUUID();
+  authUrl.searchParams.set("state", state);
+
+  const response = NextResponse.redirect(authUrl.toString());
+  response.cookies.set("google_oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 10, // 10 minutes
+  });
+
+  return response;
 }

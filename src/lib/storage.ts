@@ -160,19 +160,26 @@ export async function getFileUrls(
 
   if (creator?.google_access_token) {
     const { getDriveImageUrl } = await import("@/lib/google-drive");
-    const results = await Promise.all(
-      refs.map(async (ref) => {
-        try {
-          const url = await getDriveImageUrl(creatorId, ref);
-          return { ref, url };
-        } catch {
-          return { ref, url: "" };
-        }
-      })
-    );
-    results.forEach(({ ref, url }) => {
-      if (url) urlMap[ref] = url;
-    });
+    const BATCH_SIZE = 10;
+    
+    for (let i = 0; i < refs.length; i += BATCH_SIZE) {
+      const batch = refs.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(async (ref) => {
+          try {
+            const url = await getDriveImageUrl(creatorId, ref);
+            return { ref, url };
+          } catch {
+            return { ref, url: "" };
+          }
+        })
+      );
+      
+      batchResults.forEach(({ ref, url }) => {
+        if (url) urlMap[ref] = url;
+      });
+    }
+    
     return urlMap;
   }
 

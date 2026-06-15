@@ -7,11 +7,10 @@ export async function GET(request: NextRequest) {
   const headersList = await headers();
   const ip = headersList.get("x-forwarded-for") || "unknown";
   
-  if (ip !== "unknown") {
-    const { allowed } = await rateLimit(`verify_endpoint_${ip}`, 10, 60_000); // 10 attempts per minute
-    if (!allowed) {
-      return NextResponse.redirect(new URL("/dashboard/progress?error=rate_limited", request.url));
-    }
+  const rateLimitKey = ip !== "unknown" ? `verify_endpoint_${ip}` : `verify_global_fallback`;
+  const { allowed } = await rateLimit(rateLimitKey, 10, 60_000); // 10 attempts per minute
+  if (!allowed) {
+    return NextResponse.redirect(new URL("/dashboard/progress?error=rate_limited", request.url));
   }
 
   const token = request.nextUrl.searchParams.get("token");

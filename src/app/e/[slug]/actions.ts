@@ -22,12 +22,11 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   const headersList = await headers();
   const ip = headersList.get("x-forwarded-for") || "unknown";
   
-  if (ip !== "unknown") {
-    const { allowed } = await rateLimit(`submit_${ip}`, 5, 60_000); // 5 attempts per minute
-    if (!allowed) {
-      console.warn(`Rate limit exceeded for IP: ${ip}`);
-      redirect(`/e/${eventSlug}?error=rate_limited`);
-    }
+  const rateLimitKey = ip !== "unknown" ? `submit_${ip}` : `submit_global_fallback`;
+  const { allowed } = await rateLimit(rateLimitKey, 5, 60_000); // 5 attempts per minute
+  if (!allowed) {
+    console.warn(`Rate limit exceeded for key: ${rateLimitKey}`);
+    redirect(`/e/${eventSlug}?error=rate_limited`);
   }
 
   const supabase = await createClient();
@@ -94,11 +93,28 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
 
   const { name: full_name, phone, email, utr_id } = validationResult.data;
   
+  // PRE-VALIDATION: Block duplicate UTRs before burning upload quota
+  const { data: existingReg } = await supabase
+    .from("registrations")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("utr_id", utr_id)
+    .maybeSingle();
+
+  if (existingReg) {
+    redirect(`/e/${eventSlug}?error=Duplicate UTR ID detected. This payment reference has already been used.`);
+  }
+
   // 3. Handle File Uploads → Google Drive or Supabase Storage (auto-detected)
   const screenshot = formData.get("payment_screenshot") as File;
   let payment_screenshot_url = null;
   
   if (screenshot && screenshot.size > 0) {
+    // SECURITY: Limit file size to 5MB
+    if (screenshot.size > 5 * 1024 * 1024) {
+      redirect(`/e/${eventSlug}?error=Screenshot file size must be less than 5MB`);
+    }
+
     const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedImageTypes.includes(screenshot.type)) {
       redirect(`/e/${eventSlug}?error=invalid_file_type`);
@@ -133,6 +149,11 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     if (field.type === "file" || field.type === "file_upload") {
       const file = formData.get(field.id) as File;
       if (file && file.size > 0) {
+        // SECURITY: Limit file size to 5MB
+        if (file.size > 5 * 1024 * 1024) {
+          redirect(`/e/${eventSlug}?error=File size for ${field.label || 'custom field'} must be less than 5MB`);
+        }
+
         // Enforce strict MIME types for custom file uploads
         const allowedTypes: Record<string, string> = {
           'image/jpeg': 'jpg',
@@ -219,7 +240,9 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
               url = `https://drive.google.com/uc?export=view&id=${match[1]}`;
             }
           }
-          publicScreenshotUrl = `=HYPERLINK("${url}", "View Screenshot")`;
+          // SECURITY: Sanitize double quotes to prevent formula injection breakouts
+          const sanitizedUrl = url.replace(/"/g, '');
+          publicScreenshotUrl = `=HYPERLINK("${sanitizedUrl}", "View Screenshot")`;
         } else {
           publicScreenshotUrl = "Image upload pending";
         }

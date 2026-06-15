@@ -12,13 +12,23 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
+  const state = url.searchParams.get("state");
+  const cookieState = req.cookies.get("google_oauth_state")?.value;
 
   if (error) {
-    return NextResponse.redirect(new URL(`/dashboard/settings?error=${error}`, req.url));
+    // SECURITY: Sanitize error reflection
+    const allowedErrors = ["access_denied", "invalid_request", "unauthorized_client"];
+    const safeError = allowedErrors.includes(error) ? error : "google_auth_failed";
+    return NextResponse.redirect(new URL(`/dashboard/settings?error=${safeError}`, req.url));
   }
 
   if (!code) {
     return NextResponse.redirect(new URL("/dashboard/settings", req.url));
+  }
+
+  // SECURITY: Validate state to prevent CSRF
+  if (!state || !cookieState || state !== cookieState) {
+    return NextResponse.redirect(new URL("/dashboard/settings?error=csrf_validation_failed", req.url));
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;

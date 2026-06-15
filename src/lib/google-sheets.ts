@@ -202,7 +202,7 @@ export async function autoCreateSheet(
 export async function appendRowToSheet(
   creatorId: string,
   spreadsheetId: string,
-  values: any[]
+  values: (string | number | boolean | null)[]
 ) {
   if (!spreadsheetId) return;
 

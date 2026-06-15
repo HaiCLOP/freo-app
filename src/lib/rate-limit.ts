@@ -1,22 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-// Define a fallback in-memory cache for development or if Redis is not configured
-const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
-const CLEANUP_INTERVAL = 5 * 60 * 1000;
-let lastCleanup = Date.now();
-
-function cleanupFallback(windowMs: number) {
-  const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL) return;
-  
-  lastCleanup = now;
-  for (const [key, value] of rateLimitMap.entries()) {
-    if (now - value.lastReset > windowMs * 2) {
-      rateLimitMap.delete(key);
-    }
-  }
-}
 
 // Initialize Upstash Ratelimit if credentials are provided
 const redis = (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
@@ -45,37 +29,18 @@ export async function rateLimit(
   limit = 5,
   windowMs = 60_000
 ): Promise<{ allowed: boolean; remaining: number; resetInMs: number }> {
-  if (ratelimit) {
-    try {
-      const { success, limit: totalLimit, remaining, reset } = await ratelimit.limit(identifier);
-      const now = Date.now();
-      const resetInMs = Math.max(0, reset - now);
-      return { allowed: success, remaining, resetInMs };
-    } catch (error) {
-      console.error("Upstash rate limit error, falling back to memory:", error);
-      // Fall through to memory fallback if Redis fails
-    }
+  if (!ratelimit) {
+    console.error("CRITICAL: Upstash Redis is not configured. Rate limiting is disabled and failing secure.");
+    return { allowed: false, remaining: 0, resetInMs: windowMs };
   }
 
-  // --- Fallback Memory Implementation ---
-  cleanupFallback(windowMs);
-  
-  const now = Date.now();
-  const record = rateLimitMap.get(identifier);
-
-  // First request or window expired — reset
-  if (!record || now - record.lastReset > windowMs) {
-    rateLimitMap.set(identifier, { count: 1, lastReset: now });
-    return { allowed: true, remaining: limit - 1, resetInMs: windowMs };
+  try {
+    const { success, limit: totalLimit, remaining, reset } = await ratelimit.limit(identifier);
+    const now = Date.now();
+    const resetInMs = Math.max(0, reset - now);
+    return { allowed: success, remaining, resetInMs };
+  } catch (error) {
+    console.error("Upstash rate limit error, failing secure:", error);
+    return { allowed: false, remaining: 0, resetInMs: windowMs };
   }
-
-  // Within window — check count
-  if (record.count >= limit) {
-    const resetInMs = windowMs - (now - record.lastReset);
-    return { allowed: false, remaining: 0, resetInMs };
-  }
-
-  record.count++;
-  const resetInMs = windowMs - (now - record.lastReset);
-  return { allowed: true, remaining: limit - record.count, resetInMs };
 }
