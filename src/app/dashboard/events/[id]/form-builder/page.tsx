@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, GripVertical, Plus, Trash2, Save, Loader2, Lock, Settings2 } from "lucide-react";
+import { ArrowLeft, GripVertical, Plus, Trash2, Save, Loader2, Lock, Settings2, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { use } from "react";
 import { saveFormConfig, getFormConfig } from "./actions";
@@ -47,6 +47,12 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
 
   const [formSettings, setFormSettings] = useState<{ isClosed: boolean; closedMessage: string; waitlistEnabled: boolean }>({ isClosed: false, closedMessage: "", waitlistEnabled: false });
   const [lastSavedSettings, setLastSavedSettings] = useState<string>("");
+
+  // AI State
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   // Load Initial Config
   useEffect(() => {
@@ -167,6 +173,31 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
     setFields(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)));
   };
 
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiGenerating(true);
+    setAiError("");
+    try {
+      const res = await fetch("/api/ai/generate-form", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate form");
+      
+      if (data.fields && Array.isArray(data.fields)) {
+        setFields(data.fields);
+        setShowAiModal(false);
+        setAiPrompt("");
+      }
+    } catch (err: any) {
+      setAiError(err.message || "Something went wrong.");
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
   if (!isMounted) return null;
 
   const selectedField = fields.find(f => f.id === selectedFieldId);
@@ -198,6 +229,10 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
                 Saved
               </span>
             )}
+            <Button variant="outline" onClick={() => setShowAiModal(true)} className="rounded-xl border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 hover:text-purple-800">
+              <Sparkles className="w-4 h-4 mr-2" />
+              Generate with AI
+            </Button>
             <Button variant="outline" onClick={addField} className="rounded-xl border-dashed border-gray-300">
               <Plus className="w-4 h-4 mr-2" />
               Add Question
@@ -591,6 +626,67 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
       </div>
+
+      {/* AI Modal */}
+      {showAiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">AI Form Builder</h3>
+                  <p className="text-xs text-purple-600 font-medium">Powered by Llama 4 Scout</p>
+                </div>
+              </div>
+              <button onClick={() => setShowAiModal(false)} className="text-gray-400 hover:text-gray-600 bg-white p-2 rounded-full shadow-sm">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Describe the type of form you want to create, and AI will generate the appropriate fields for you. This will replace your current fields.
+              </p>
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="e.g. Create a volunteer registration form with emergency contact and t-shirt size..."
+                className="w-full h-32 p-4 text-sm border border-gray-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none resize-none"
+                disabled={isAiGenerating}
+              />
+              {aiError && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100">
+                  {aiError}
+                </div>
+              )}
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setShowAiModal(false)} disabled={isAiGenerating}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAiGenerate} 
+                disabled={isAiGenerating || !aiPrompt.trim()}
+                className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl px-6"
+              >
+                {isAiGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Generate Form
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

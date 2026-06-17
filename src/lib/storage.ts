@@ -72,9 +72,15 @@ export async function uploadFile(
 
   const adminClient = getAdminClient();
 
+  // Convert File to Buffer to avoid Next.js Native File issues with Supabase Storage
+  const buffer = Buffer.from(await file.arrayBuffer());
+
   const { data, error } = await adminClient.storage
     .from(bucket)
-    .upload(key, file);
+    .upload(key, buffer, {
+      contentType: file.type || "application/octet-stream",
+      upsert: true,
+    });
 
   if (error) {
     throw new Error(`Upload failed: ${error.message}`);

@@ -7,12 +7,33 @@ const redis = (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_R
   ? Redis.fromEnv()
   : null;
 
-// We create a sliding window limiter: 5 requests per 60 seconds
+// We create a sliding window limiter: 5 requests per 60 seconds (General API)
 const ratelimit = redis
   ? new Ratelimit({
       redis,
       limiter: Ratelimit.slidingWindow(5, "60 s"),
       analytics: true,
+      prefix: "@upstash/ratelimit:general",
+    })
+  : null;
+
+// AI Form Builder: 3 requests per day
+const aiFormLimiter = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(3, "1 d"),
+      analytics: true,
+      prefix: "@upstash/ratelimit:ai_form",
+    })
+  : null;
+
+// AI Analytics: 5 requests per day
+const aiAnalyticsLimiter = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(5, "1 d"),
+      analytics: true,
+      prefix: "@upstash/ratelimit:ai_analytics",
     })
   : null;
 
@@ -44,3 +65,36 @@ export async function rateLimit(
     return { allowed: false, remaining: 0, resetInMs: windowMs };
   }
 }
+
+export async function checkAiFormLimit(
+  userId: string
+): Promise<{ allowed: boolean; remaining: number }> {
+  if (!aiFormLimiter) {
+    console.error("CRITICAL: Upstash Redis is not configured. Failing secure for AI.");
+    return { allowed: false, remaining: 0 };
+  }
+  try {
+    const { success, remaining } = await aiFormLimiter.limit(userId);
+    return { allowed: success, remaining };
+  } catch (error) {
+    console.error("Upstash rate limit error, failing secure:", error);
+    return { allowed: false, remaining: 0 };
+  }
+}
+
+export async function checkAiAnalyticsLimit(
+  userId: string
+): Promise<{ allowed: boolean; remaining: number }> {
+  if (!aiAnalyticsLimiter) {
+    console.error("CRITICAL: Upstash Redis is not configured. Failing secure for AI.");
+    return { allowed: false, remaining: 0 };
+  }
+  try {
+    const { success, remaining } = await aiAnalyticsLimiter.limit(userId);
+    return { allowed: success, remaining };
+  } catch (error) {
+    console.error("Upstash rate limit error, failing secure:", error);
+    return { allowed: false, remaining: 0 };
+  }
+}
+
