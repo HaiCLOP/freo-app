@@ -12,12 +12,14 @@ import crypto from "crypto";
 const createEventSchema = z.object({
   name: z.string().min(3).max(150),
   description: z.string().max(5000),
-  dateStr: z.string(),
-  venue: z.string().max(255),
-  price: z.number().min(0).max(1000000),
-  max_capacity: z.number().min(1).max(100000),
-  upi_id: z.string().max(100).regex(/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/, "Invalid UPI format"),
+  dateStr: z.string().optional(),
+  venue: z.string().max(255).optional(),
+  price: z.number().min(0).max(1000000).optional(),
+  max_capacity: z.number().min(1).max(100000).optional(),
+  upi_id: z.string().max(100).regex(/^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z]{2,64}$/, "Invalid UPI format").optional().or(z.literal('')),
   phase_registration: z.boolean(),
+  form_type: z.enum(['event', 'survey']).default('event'),
+  payment_type: z.enum(['paid', 'free']).default('paid'),
 });
 
 export async function createEvent(formData: FormData) {
@@ -28,15 +30,23 @@ export async function createEvent(formData: FormData) {
     throw new Error("Unauthorized");
   }
 
+  const formType = (formData.get("form_type") as string) || "event";
+  const paymentType = (formData.get("payment_type") as string) || "paid";
+
+  const isSurvey = formType === 'survey';
+  const isFree = paymentType === 'free' || isSurvey;
+
   const rawData = {
     name: formData.get("name") as string,
     description: formData.get("description") as string,
-    dateStr: formData.get("date") as string,
-    venue: formData.get("venue") as string,
-    price: parseFloat(formData.get("price") as string),
-    max_capacity: parseInt(formData.get("max_capacity") as string, 10),
-    upi_id: formData.get("upi_id") as string,
-    phase_registration: formData.get("phase_registration") === "on",
+    dateStr: isSurvey ? new Date().toISOString() : (formData.get("date") as string),
+    venue: isSurvey ? "Online Survey" : (formData.get("venue") as string),
+    price: isFree ? 0 : parseFloat(formData.get("price") as string),
+    max_capacity: isSurvey ? 100000 : parseInt(formData.get("max_capacity") as string, 10),
+    upi_id: isFree ? "" : (formData.get("upi_id") as string),
+    phase_registration: isSurvey ? false : formData.get("phase_registration") === "on",
+    form_type: formType,
+    payment_type: paymentType,
   };
 
   const validation = createEventSchema.safeParse(rawData);
@@ -45,7 +55,7 @@ export async function createEvent(formData: FormData) {
     redirect(`/dashboard/events/new?error=invalid_data`);
   }
 
-  const { name, description, dateStr, venue, price, max_capacity, upi_id, phase_registration } = validation.data;
+  const { name, description, dateStr, venue, price, max_capacity, upi_id, phase_registration, form_type } = validation.data;
   const daily_reg_limit = phase_registration ? 100 : max_capacity;
   
   const bannerFile = formData.get("banner") as File;
@@ -126,7 +136,7 @@ export async function createEvent(formData: FormData) {
       slug,
       description,
       banner_url,
-      date: new Date(dateStr).toISOString(),
+      date: new Date(dateStr!).toISOString(),
       venue,
       price,
       max_capacity,
@@ -135,7 +145,8 @@ export async function createEvent(formData: FormData) {
       google_sheet_id,
       is_active: true,
       phase_registration,
-      daily_reg_limit
+      daily_reg_limit,
+      form_type,
     })
     .select("id")
     .single();

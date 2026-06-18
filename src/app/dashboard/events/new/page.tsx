@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, Upload, Loader2, IndianRupee, Image as ImageIcon, CheckCircle2, Clock, Users } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, IndianRupee, Image as ImageIcon, CheckCircle2, Clock, Users, FileText, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { createEvent } from "../actions";
 
@@ -17,8 +17,12 @@ export default function NewEventPage() {
   const [qrFile, setQrFile] = useState<File | null>(null);
   const [capacity, setCapacity] = useState<number>(0);
   const [phaseEnabled, setPhaseEnabled] = useState(false);
+  
+  // New States for Form Type & Payment
+  const [formType, setFormType] = useState<'event' | 'survey'>('event');
+  const [paymentType, setPaymentType] = useState<'paid' | 'free'>('paid');
 
-  const showPhaseOption = capacity > 100;
+  const showPhaseOption = capacity > 100 && formType === 'event';
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -71,15 +75,66 @@ export default function NewEventPage() {
         }} 
         className={`space-y-6 ${isSubmitting ? 'pointer-events-none opacity-60' : ''}`}
       >
+        <input type="hidden" name="form_type" value={formType} />
+        <input type="hidden" name="payment_type" value={paymentType} />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setFormType('event')}
+            className={`p-5 rounded-2xl border-2 text-left transition-all ${formType === 'event' ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <CalendarDays className={`w-6 h-6 ${formType === 'event' ? 'text-primary' : 'text-gray-400'}`} />
+              {formType === 'event' && <CheckCircle2 className="w-5 h-5 text-primary" />}
+            </div>
+            <h3 className="font-semibold text-gray-900">Event Registration</h3>
+            <p className="text-sm text-gray-500 mt-1">Collect attendees, sell tickets, phase-wise capacity.</p>
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => { setFormType('survey'); setPaymentType('free'); }}
+            className={`p-5 rounded-2xl border-2 text-left transition-all ${formType === 'survey' ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <FileText className={`w-6 h-6 ${formType === 'survey' ? 'text-primary' : 'text-gray-400'}`} />
+              {formType === 'survey' && <CheckCircle2 className="w-5 h-5 text-primary" />}
+            </div>
+            <h3 className="font-semibold text-gray-900">Survey / Form</h3>
+            <p className="text-sm text-gray-500 mt-1">Simple questionnaire. No dates, venues, or payments.</p>
+          </button>
+        </div>
+
+        {formType === 'event' && (
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-center justify-center gap-2">
+            <span className="text-sm font-medium text-gray-600 mr-2">Payment Type:</span>
+            <button
+              type="button"
+              onClick={() => setPaymentType('paid')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${paymentType === 'paid' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              Paid (UPI)
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentType('free')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${paymentType === 'free' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              Free
+            </button>
+          </div>
+        )}
+
         <Card className="rounded-2xl border-gray-100 shadow-sm">
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
-            <CardDescription>This information will be displayed publicly on the registration page.</CardDescription>
+            <CardDescription>This information will be displayed publicly on the form.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="name">Event Name</Label>
-              <Input id="name" name="name" placeholder="e.g. Annual Business Seminar" required className="rounded-xl bg-gray-50/50" />
+              <Label htmlFor="name">{formType === 'event' ? 'Event Name' : 'Form Title'}</Label>
+              <Input id="name" name="name" placeholder={formType === 'event' ? "e.g. Annual Business Seminar" : "e.g. Customer Feedback Survey"} required className="rounded-xl bg-gray-50/50" />
             </div>
 
             <div className="space-y-2">
@@ -93,51 +148,57 @@ export default function NewEventPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <Label htmlFor="date">Date & Time</Label>
-                <Input id="date" name="date" type="datetime-local" required className="rounded-xl bg-gray-50/50" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="venue">Venue Location</Label>
-                <Input id="venue" name="venue" placeholder="e.g. Radisson Blu, Guwahati" required className="rounded-xl bg-gray-50/50" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <Label htmlFor="price">Ticket Price (INR)</Label>
-                <div className="relative">
-                  <IndianRupee className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
-                  <Input id="price" name="price" type="number" min="0" step="1" placeholder="500" required className="pl-9 rounded-xl bg-gray-50/50" />
+            {formType === 'event' && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="date">Date & Time</Label>
+                    <Input id="date" name="date" type="datetime-local" required className="rounded-xl bg-gray-50/50" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="venue">Venue Location</Label>
+                    <Input id="venue" name="venue" placeholder="e.g. Radisson Blu, Guwahati" required className="rounded-xl bg-gray-50/50" />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="max_capacity">Maximum Capacity</Label>
-                <Input 
-                  id="max_capacity" 
-                  name="max_capacity" 
-                  type="number" 
-                  min="1" 
-                  placeholder="100" 
-                  required 
-                  className="rounded-xl bg-gray-50/50" 
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    setCapacity(isNaN(val) ? 0 : val);
-                    // Auto-enable phase registration for large events
-                    if (val > 100) {
-                      setPhaseEnabled(true);
-                    } else {
-                      setPhaseEnabled(false);
-                    }
-                  }}
-                />
-              </div>
-            </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {paymentType === 'paid' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Ticket Price (INR)</Label>
+                      <div className="relative">
+                        <IndianRupee className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                        <Input id="price" name="price" type="number" min="1" step="1" placeholder="500" required className="pl-9 rounded-xl bg-gray-50/50" />
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="max_capacity">Maximum Capacity</Label>
+                    <Input 
+                      id="max_capacity" 
+                      name="max_capacity" 
+                      type="number" 
+                      min="1" 
+                      placeholder="100" 
+                      required 
+                      className="rounded-xl bg-gray-50/50" 
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setCapacity(isNaN(val) ? 0 : val);
+                        // Auto-enable phase registration for large events
+                        if (val > 100) {
+                          setPhaseEnabled(true);
+                        } else {
+                          setPhaseEnabled(false);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Phase-wise Registration — shown when capacity > 100 */}
-            {showPhaseOption && (
+            {showPhaseOption && formType === 'event' && (
               <div className="animate-in slide-in-from-top-2 fade-in duration-300">
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-4">
                   <div className="flex items-start gap-3">
@@ -222,46 +283,48 @@ export default function NewEventPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-gray-100 shadow-sm">
-          <CardHeader>
-            <CardTitle>Payment Configuration</CardTitle>
-            <CardDescription>Set up where attendees will send their payments via UPI.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="upi_id">Your UPI ID</Label>
-              <Input id="upi_id" name="upi_id" placeholder="e.g. john@okaxis" required className="rounded-xl bg-gray-50/50" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="upi_qr">UPI QR Code Image</Label>
-              <div className={`relative border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-colors ${qrFile ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'}`}>
-                {qrFile ? (
-                  <>
-                    <CheckCircle2 className="w-8 h-8 text-primary mb-2" />
-                    <p className="text-sm font-medium text-gray-900 line-clamp-1 px-4">{qrFile.name}</p>
-                    <p className="text-xs text-gray-500 mt-1">Click to replace</p>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                    <p className="text-sm font-medium text-gray-900">Upload QR Code</p>
-                    <p className="text-xs text-gray-500 mt-1">Make sure it's clear and scannable</p>
-                  </>
-                )}
-                <input 
-                  type="file" 
-                  id="upi_qr" 
-                  name="upi_qr" 
-                  accept="image/*" 
-                  className="opacity-0 absolute inset-0 cursor-pointer"
-                  required 
-                  onChange={(e) => setQrFile(e.target.files?.[0] || null)}
-                />
+        {formType === 'event' && paymentType === 'paid' && (
+          <Card className="rounded-2xl border-gray-100 shadow-sm">
+            <CardHeader>
+              <CardTitle>Payment Configuration</CardTitle>
+              <CardDescription>Set up where attendees will send their payments via UPI.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="upi_id">Your UPI ID</Label>
+                <Input id="upi_id" name="upi_id" placeholder="e.g. john@okaxis" required className="rounded-xl bg-gray-50/50" />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+
+              <div className="space-y-2">
+                <Label htmlFor="upi_qr">UPI QR Code Image</Label>
+                <div className={`relative border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center transition-colors ${qrFile ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'}`}>
+                  {qrFile ? (
+                    <>
+                      <CheckCircle2 className="w-8 h-8 text-primary mb-2" />
+                      <p className="text-sm font-medium text-gray-900 line-clamp-1 px-4">{qrFile.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">Click to replace</p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                      <p className="text-sm font-medium text-gray-900">Upload QR Code</p>
+                      <p className="text-xs text-gray-500 mt-1">Make sure it's clear and scannable</p>
+                    </>
+                  )}
+                  <input 
+                    type="file" 
+                    id="upi_qr" 
+                    name="upi_qr" 
+                    accept="image/*" 
+                    className="opacity-0 absolute inset-0 cursor-pointer"
+                    required 
+                    onChange={(e) => setQrFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="rounded-2xl border-gray-100 shadow-sm border-green-100 bg-green-50/30">
           <CardHeader>

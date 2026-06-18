@@ -151,10 +151,10 @@ export default async function PublicEventPage({ params, searchParams }: { params
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 md:px-6 -mt-8 relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className={`max-w-4xl mx-auto px-4 md:px-6 -mt-8 relative z-10 grid grid-cols-1 ${event.form_type === 'survey' ? '' : 'md:grid-cols-3'} gap-8`}>
         
         {/* Left Column: Form */}
-        <div className="md:col-span-2 space-y-6">
+        <div className={`${event.form_type === 'survey' ? '' : 'md:col-span-2'} space-y-6`}>
           {resolvedSearchParams.error && (
              <div className="bg-red-50 text-red-600 text-sm p-4 rounded-xl border border-red-100 flex items-center gap-3">
                <AlertCircle className="w-5 h-5" />
@@ -259,57 +259,62 @@ export default async function PublicEventPage({ params, searchParams }: { params
         </div>
 
         {/* Right Column: Event Info Widget */}
-        <div className="space-y-6">
-          <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden sticky top-6">
-            <CardContent className="p-6">
-              <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-                    <Calendar className="w-6 h-6" />
+        {event.form_type !== 'survey' && (
+          <div className="space-y-6">
+            <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden sticky top-6">
+              <CardContent className="p-6">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                      <Calendar className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Date & Time</p>
+                      <p className="font-semibold text-gray-900">{new Date(event.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Date & Time</p>
-                    <p className="font-semibold text-gray-900">{new Date(event.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                      <MapPin className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Venue</p>
+                      <p className="font-semibold text-gray-900">{event.venue}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <IndianRupee className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Entry Fee</p>
+                      <p className="font-bold text-2xl text-gray-900">{event.price > 0 ? `₹${event.price}` : 'Free'}</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                    <MapPin className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Venue</p>
-                    <p className="font-semibold text-gray-900">{event.venue}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                    <IndianRupee className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Entry Fee</p>
-                    <p className="font-bold text-2xl text-gray-900">₹{event.price}</p>
-                  </div>
-                </div>
-              </div>
-
-              <hr className="my-6 border-gray-100" />
-              
-              <div className="text-center space-y-4">
-                <p className="text-sm font-bold text-gray-900 uppercase tracking-wider">Pay via UPI</p>
-                {event.upi_qr_url && (
-                  <div className="w-48 h-48 mx-auto relative rounded-xl overflow-hidden border border-gray-100 shadow-sm">
-                    <Image src={event.upi_qr_url} alt="UPI QR" fill className="object-cover" />
-                  </div>
+                {event.price > 0 && (
+                  <>
+                    <hr className="my-6 border-gray-100" />
+                    <div className="text-center space-y-4">
+                      <p className="text-sm font-bold text-gray-900 uppercase tracking-wider">Pay via UPI</p>
+                      {event.upi_qr_url && (
+                        <div className="w-48 h-48 mx-auto relative rounded-xl overflow-hidden border border-gray-100 shadow-sm">
+                          <Image src={event.upi_qr_url} alt="UPI QR" fill className="object-cover" />
+                        </div>
+                      )}
+                      <div className="bg-gray-50 py-3 px-4 rounded-xl border border-gray-100 inline-block font-mono text-sm font-medium text-gray-900">
+                        {event.upi_id}
+                      </div>
+                    </div>
+                  </>
                 )}
-                <div className="bg-gray-50 py-3 px-4 rounded-xl border border-gray-100 inline-block font-mono text-sm font-medium text-gray-900">
-                  {event.upi_id}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
       </div>
 

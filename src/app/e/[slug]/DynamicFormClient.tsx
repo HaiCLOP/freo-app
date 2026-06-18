@@ -297,46 +297,46 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
         ) : null}
       </div>
 
-      {/* Mandatory Payment Section - Only show on last page */}
-      {isLastPage && (
-        <>
-          <div className="space-y-6">
-            <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
-            <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
-              Please ensure you have sent <strong>₹{event.price}</strong> to the UPI details shown on the right before submitting this form.
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="utr_id" className="text-gray-700 font-medium">UTR / Transaction ID <span className="text-red-500">*</span></Label>
-              <Input 
-                id="utr_id" 
-                name="utr_id" 
-                placeholder="e.g. 123456789012" 
-                required 
-                className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6 font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="payment_screenshot" className="text-gray-700 font-medium">Payment Screenshot <span className="text-red-500">*</span></Label>
-              <Input 
-                id="payment_screenshot" 
-                name="payment_screenshot" 
-                type="file" 
-                accept="image/*"
-                required 
-                className="h-auto py-3 rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-gray-800 cursor-pointer"
-              />
-            </div>
+      {/* Mandatory Payment Section - Only show on last page if paid event */}
+      {isLastPage && event.price > 0 && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
+          <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
+            Please ensure you have sent <strong>₹{event.price}</strong> to the UPI details shown on the right before submitting this form.
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="utr_id" className="text-gray-700 font-medium">UTR / Transaction ID <span className="text-red-500">*</span></Label>
+            <Input 
+              id="utr_id" 
+              name="utr_id" 
+              placeholder="e.g. 123456789012" 
+              required 
+              className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6 font-mono"
+            />
           </div>
 
-          <SubmitButton 
-            className="w-full py-6 text-base font-semibold rounded-xl bg-gray-900 hover:bg-primary transition-all duration-300 text-white shadow-md hover:shadow-primary/25 mt-8"
-            pendingText={isWaitlistMode ? "Joining..." : "Submitting..."}
-          >
-            {isWaitlistMode ? "Join Waitlist" : "Submit Registration"}
-          </SubmitButton>
-        </>
+          <div className="space-y-2">
+            <Label htmlFor="payment_screenshot" className="text-gray-700 font-medium">Payment Screenshot <span className="text-red-500">*</span></Label>
+            <Input 
+              id="payment_screenshot" 
+              name="payment_screenshot" 
+              type="file" 
+              accept="image/*"
+              required 
+              className="h-auto py-3 rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-gray-800 cursor-pointer"
+            />
+          </div>
+        </div>
+      )}
+
+      {isLastPage && (
+        <SubmitButton 
+          className="w-full py-6 text-base font-semibold rounded-xl bg-gray-900 hover:bg-primary transition-all duration-300 text-white shadow-md hover:shadow-primary/25 mt-8"
+          pendingText={isWaitlistMode ? "Joining..." : "Submitting..."}
+        >
+          {event.form_type === 'survey' ? "Submit Survey" : (isWaitlistMode ? "Join Waitlist" : "Submit Registration")}
+        </SubmitButton>
       )}
     </>
   );
