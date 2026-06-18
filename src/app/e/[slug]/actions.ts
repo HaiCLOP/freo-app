@@ -271,7 +271,25 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
         if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
         
         let val = custom_fields[field.id];
-        if (val === undefined || val === null) {
+        
+        if ((field.type === "file_upload" || field.type === "file") && val) {
+          try {
+            let url = await getFileUrl(event.creator_id, val);
+            if (url) {
+              if (url.includes("drive.google.com")) {
+                const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                  url = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                }
+              }
+              const sanitizedUrl = url.replace(/"/g, '');
+              val = `=HYPERLINK("${sanitizedUrl}", "View File")`;
+            }
+          } catch (e) {
+            console.error("Failed to fetch custom file url for sheet", e);
+            val = String(val);
+          }
+        } else if (val === undefined || val === null) {
           val = "";
         } else if (typeof val === 'object') {
           val = JSON.stringify(val);
