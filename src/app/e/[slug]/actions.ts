@@ -258,11 +258,11 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       full_name,
       phone,
       email,
-      utr_id,
+      utr_id || "",
       isWaitlisted ? "Waitlisted" : "Pending",
       registeredAt,
       "", // Approved At is empty for now
-      publicScreenshotUrl
+      publicScreenshotUrl || ""
     ];
 
     // Try direct write first
