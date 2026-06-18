@@ -82,7 +82,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     name: formData.get("name") as string,
     phone: formData.get("phone") as string,
     email: formData.get("email") as string,
-    utr_id: formData.get("utr_id") as string,
+    utr_id: (formData.get("utr_id") as string) || "",
   };
 
   const validationResult = registrationSchema.safeParse(rawData);
