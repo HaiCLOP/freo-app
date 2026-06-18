@@ -88,6 +88,7 @@ async function getGoogleAuth(creatorId: string) {
 export async function autoCreateSheet(
   creatorId: string,
   eventName: string,
+  formType: 'event' | 'survey' = 'event',
   driveFolderId?: string
 ): Promise<string> {
   const { auth } = await getGoogleAuth(creatorId);
@@ -113,26 +114,19 @@ export async function autoCreateSheet(
 
   const spreadsheetId = spreadsheet.data.spreadsheetId!;
 
-  // 2. Add headers
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: "Registrations!A1:J1",
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [
-        [
-          "Name",
-          "Phone",
-          "Email",
-          "UTR ID",
-          "Status",
-          "Registered At",
-          "Approved At",
-          "Payment Screenshot URL",
-        ],
-      ],
-    },
-  });
+    const baseHeaders = ["Name", "Phone", "Email"];
+    if (formType !== "survey") baseHeaders.push("UTR ID");
+    baseHeaders.push("Status", "Registered At", "Approved At");
+    if (formType !== "survey") baseHeaders.push("Payment Screenshot URL");
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Registrations!A1:Z1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [baseHeaders],
+      },
+    });
 
   // 3. Format headers
   const sheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
@@ -265,14 +259,33 @@ export async function updateRowStatusInSheet(
     const rows = response.data.values;
     if (!rows || rows.length === 0) return;
 
+    const headers = rows[0] || [];
+    const utrIdx = headers.indexOf("UTR ID");
+    const emailIdx = headers.indexOf("Email");
+    const nameIdx = headers.indexOf("Name");
+    const statusIdx = headers.indexOf("Status");
+    const approvedAtIdx = headers.indexOf("Approved At");
+
+    const indexToCol = (index: number) => {
+      let temp, letter = '';
+      while (index >= 0) {
+        temp = index % 26;
+        letter = String.fromCharCode(temp + 65) + letter;
+        index = (index - temp - 26) / 26;
+      }
+      return letter;
+    };
+
     // Find the row matching UTR ID or fallback to Email/Name
     const rowIndex = rows.findIndex((row, idx) => {
       if (idx === 0) return false; // skip header
-      const sheetUtr = row[3]?.toString().trim().toLowerCase(); // Column D (index 3) is UTR ID
+      const sheetUtr = utrIdx !== -1 ? row[utrIdx]?.toString().trim().toLowerCase() : undefined;
       const targetUtr = utrId?.toString().trim().toLowerCase();
-      const sheetEmail = row[2]?.toString().trim().toLowerCase();
+      
+      const sheetEmail = emailIdx !== -1 ? row[emailIdx]?.toString().trim().toLowerCase() : undefined;
       const targetEmail = email?.toString().trim().toLowerCase();
-      const sheetName = row[0]?.toString().trim().toLowerCase();
+      
+      const sheetName = nameIdx !== -1 ? row[nameIdx]?.toString().trim().toLowerCase() : undefined;
       const targetName = name?.toString().trim().toLowerCase();
 
       if (targetUtr && sheetUtr === targetUtr) return true;
@@ -289,17 +302,24 @@ export async function updateRowStatusInSheet(
 
     const rowNum = rowIndex + 1;
 
-    // Update Status (Column E) and Approved At (Column G)
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        valueInputOption: "USER_ENTERED",
-        data: [
-          { range: `Registrations!E${rowNum}`, values: [[status]] },
-          { range: `Registrations!G${rowNum}`, values: [[approvedAt || ""]] },
-        ],
-      },
-    });
+    // Dynamically update Status and Approved At using column indices
+    const updateData = [];
+    if (statusIdx !== -1) {
+      updateData.push({ range: `Registrations!${indexToCol(statusIdx)}${rowNum}`, values: [[status]] });
+    }
+    if (approvedAtIdx !== -1) {
+      updateData.push({ range: `Registrations!${indexToCol(approvedAtIdx)}${rowNum}`, values: [[approvedAt || ""]] });
+    }
+
+    if (updateData.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: "USER_ENTERED",
+          data: updateData,
+        },
+      });
+    }
   } catch (error) {
     console.error("Failed to update Google Sheet row:", error);
     throw error;
@@ -310,23 +330,17 @@ export async function updateRowStatusInSheet(
  * Synchronize the Google Sheet headers with the latest dynamic form configuration.
  * Retains the 8 standard columns and dynamically appends custom field labels.
  */
-export async function syncSheetHeaders(creatorId: string, spreadsheetId: string, formConfig: any[]) {
+export async function syncSheetHeaders(creatorId: string, spreadsheetId: string, formConfig: any[], formType: 'event' | 'survey' = 'event') {
   if (!spreadsheetId) return;
 
   try {
     const { auth } = await getGoogleAuth(creatorId);
     const sheets = google.sheets({ version: "v4", auth });
 
-    const headers = [
-      "Name",
-      "Phone",
-      "Email",
-      "UTR ID",
-      "Status",
-      "Registered At",
-      "Approved At",
-      "Payment Screenshot URL",
-    ];
+    const headers = ["Name", "Phone", "Email"];
+    if (formType !== "survey") headers.push("UTR ID");
+    headers.push("Status", "Registered At", "Approved At");
+    if (formType !== "survey") headers.push("Payment Screenshot URL");
 
     if (formConfig && Array.isArray(formConfig)) {
       for (const field of formConfig) {

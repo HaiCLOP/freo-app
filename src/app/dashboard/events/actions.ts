@@ -119,6 +119,7 @@ export async function createEvent(formData: FormData) {
       google_sheet_id = await autoCreateSheet(
         user.id,
         name,
+        form_type as 'event' | 'survey',
         creator.google_drive_folder_id || undefined
       );
     }

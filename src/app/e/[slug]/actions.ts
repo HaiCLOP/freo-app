@@ -258,12 +258,16 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       full_name,
       phone,
       email,
-      utr_id || "",
-      isWaitlisted ? "Waitlisted" : "Pending",
-      registeredAt,
-      "", // Approved At is empty for now
-      publicScreenshotUrl || ""
     ];
+    if (event.form_type !== 'survey') {
+      sheetRow.push(utr_id || "");
+    }
+    sheetRow.push(isWaitlisted ? "Waitlisted" : "Pending");
+    sheetRow.push(registeredAt);
+    sheetRow.push(""); // Approved At
+    if (event.form_type !== 'survey') {
+      sheetRow.push(publicScreenshotUrl || "");
+    }
 
     if (formConfig && Array.isArray(formConfig)) {
       for (const field of formConfig) {
