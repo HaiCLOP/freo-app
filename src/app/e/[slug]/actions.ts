@@ -12,7 +12,7 @@ const registrationSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name is too long"),
   phone: z.string().min(10, "Phone is too short").max(20, "Phone is too long").regex(/^[0-9+\-\s()]+$/, "Invalid phone format"),
   email: z.string().email("Invalid email format").max(255, "Email is too long"),
-  utr_id: z.string().min(4, "UTR is too short").max(50, "UTR is too long"),
+  utr_id: z.string().max(50, "UTR is too long").optional().or(z.literal('')),
 });
 
 // We now use the centralized Upstash Redis rate limiter imported above.
@@ -94,15 +94,17 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   const { name: full_name, phone, email, utr_id } = validationResult.data;
   
   // PRE-VALIDATION: Block duplicate UTRs before burning upload quota
-  const { data: existingReg } = await supabase
-    .from("registrations")
-    .select("id")
-    .eq("event_id", eventId)
-    .eq("utr_id", utr_id)
-    .maybeSingle();
+  if (utr_id && utr_id.trim().length > 0) {
+    const { data: existingReg } = await supabase
+      .from("registrations")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("utr_id", utr_id)
+      .maybeSingle();
 
-  if (existingReg) {
-    redirect(`/e/${eventSlug}?error=Duplicate UTR ID detected. This payment reference has already been used.`);
+    if (existingReg) {
+      redirect(`/e/${eventSlug}?error=Duplicate UTR ID detected. This payment reference has already been used.`);
+    }
   }
 
   // 3. Handle File Uploads → Google Drive or Supabase Storage (auto-detected)
@@ -145,6 +147,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   
   for (const field of formConfig) {
     if (["name", "phone", "email"].includes(field.id)) continue;
+    if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
     
     if (field.type === "file" || field.type === "file_upload") {
       const file = formData.get(field.id) as File;

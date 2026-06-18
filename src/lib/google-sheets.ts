@@ -268,7 +268,7 @@ export async function updateRowStatusInSheet(
     // Find the row matching UTR ID or fallback to Email/Name
     const rowIndex = rows.findIndex((row, idx) => {
       if (idx === 0) return false; // skip header
-      const sheetUtr = row[5]?.toString().trim().toLowerCase();
+      const sheetUtr = row[3]?.toString().trim().toLowerCase(); // Column D (index 3) is UTR ID
       const targetUtr = utrId?.toString().trim().toLowerCase();
       const sheetEmail = row[2]?.toString().trim().toLowerCase();
       const targetEmail = email?.toString().trim().toLowerCase();
@@ -289,14 +289,14 @@ export async function updateRowStatusInSheet(
 
     const rowNum = rowIndex + 1;
 
-    // Update Status (Column G) and Approved At (Column I)
+    // Update Status (Column E) and Approved At (Column G)
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId,
       requestBody: {
         valueInputOption: "USER_ENTERED",
         data: [
-          { range: `Registrations!G${rowNum}`, values: [[status]] },
-          { range: `Registrations!I${rowNum}`, values: [[approvedAt || ""]] },
+          { range: `Registrations!E${rowNum}`, values: [[status]] },
+          { range: `Registrations!G${rowNum}`, values: [[approvedAt || ""]] },
         ],
       },
     });

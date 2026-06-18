@@ -91,6 +91,48 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
     }
   };
 
+  const renderDescription = (text: string | undefined) => {
+    if (!text) return null;
+    
+    const lines = text.split(/<br\s*\/?>/i);
+    
+    return lines.map((line, lineIndex) => {
+      const parts = [];
+      let lastIndex = 0;
+      const regex = /\[([^\]]+)\]\(([^)]+)\)/g;
+      let match;
+      
+      while ((match = regex.exec(line)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(<span key={`text-${lastIndex}`}>{line.substring(lastIndex, match.index)}</span>);
+        }
+        
+        let url = match[2].trim();
+        if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+          url = url.substring(1, url.length - 1);
+        }
+
+        parts.push(
+          <a key={`link-${match.index}`} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline underline-offset-2 break-all">
+            {match[1]}
+          </a>
+        );
+        lastIndex = regex.lastIndex;
+      }
+      
+      if (lastIndex < line.length) {
+        parts.push(<span key={`text-${lastIndex}`}>{line.substring(lastIndex)}</span>);
+      }
+      
+      return (
+        <span key={`line-${lineIndex}`}>
+          {parts}
+          {lineIndex < lines.length - 1 && <br />}
+        </span>
+      );
+    });
+  };
+
   return (
     <>
       {/* Dynamic Fields */}
@@ -106,7 +148,19 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
           return (
             <div key={field.id} className="pt-6 pb-2 border-b border-gray-100 mt-8">
               <h3 className="text-xl font-bold text-gray-900">{field.label}</h3>
-              {field.description && <p className="text-gray-500 mt-2 text-sm">{field.description}</p>}
+              {field.description && <p className="text-gray-500 mt-2 text-sm">{renderDescription(field.description)}</p>}
+            </div>
+          );
+        }
+
+        if (field.type === "hyperlink") {
+          return (
+            <div key={field.id} className="pt-2 pb-2 mt-4 space-y-1">
+              <a href={field.options} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-medium underline underline-offset-4 break-all inline-flex items-center gap-1">
+                {field.label}
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              </a>
+              {field.description && <p className="text-gray-500 mt-1 text-sm">{renderDescription(field.description)}</p>}
             </div>
           );
         }
@@ -117,7 +171,7 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
               {field.label} {field.required && <span className="text-red-500">*</span>}
             </Label>
             {field.description && (
-              <p className="text-sm text-gray-500 pb-1">{field.description}</p>
+              <p className="text-sm text-gray-500 pb-1">{renderDescription(field.description)}</p>
             )}
             
             {field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "number" ? (
