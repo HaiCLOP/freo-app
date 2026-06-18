@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CheckCircle, XCircle, Search, Clock, ExternalLink, IndianRupee, TrendingUp } from "lucide-react";
 import Link from "next/link";
-import { approveRegistration, rejectRegistration, updateEventDetails } from "./actions";
+import { approveRegistration, rejectRegistration, updateEventDetails, replyToSurveyRegistration } from "./actions";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/submit-button";
 import { getFileUrls } from "@/lib/storage";
@@ -198,7 +198,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
         <Card className="rounded-[24px] border border-[#f5f5f7] shadow-sm hover:shadow-md transition-all duration-300 bg-white overflow-hidden">
           <CardContent className="p-7">
              <div className="flex items-center justify-between mb-2">
-              <p className="text-[15px] font-medium text-[#86868b]">Approved</p>
+              <p className="text-[15px] font-medium text-[#86868b]">{event.form_type === 'survey' ? 'Replied' : 'Approved'}</p>
               <div className="p-2 bg-[#34c759]/10 text-[#34c759] rounded-full">
                 <CheckCircle className="w-5 h-5" />
               </div>
@@ -292,7 +292,7 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                     <div className="flex items-center gap-3">
                       <h3 className="text-[17px] font-semibold text-[#1d1d1f]">{reg.full_name}</h3>
                       {reg.status === 'pending' && <Badge variant="secondary" className="bg-[#ff3b30]/10 text-[#ff3b30] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Pending</Badge>}
-                      {reg.status === 'approved' && <Badge variant="secondary" className="bg-[#34c759]/10 text-[#34c759] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Approved</Badge>}
+                      {reg.status === 'approved' && <Badge variant="secondary" className="bg-[#34c759]/10 text-[#34c759] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">{event.form_type === 'survey' ? 'Replied' : 'Approved'}</Badge>}
                       {reg.status === 'rejected' && <Badge variant="secondary" className="bg-[#86868b]/10 text-[#86868b] border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Rejected</Badge>}
                       {reg.status === 'waitlisted' && <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 border-0 rounded-full px-3 py-0.5 text-xs font-semibold">Waitlisted</Badge>}
                     </div>
@@ -333,11 +333,41 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                   <div className="flex items-center gap-2 md:pl-4">
                     {reg.status === 'pending' || reg.status === 'waitlisted' ? (
                       <>
-                        <form action={approveRegistration.bind(null, reg.id, eventId)}>
-                          <SubmitButton size="sm" className="bg-[#34c759] hover:bg-[#2eb050] text-white rounded-full px-5 h-9 font-medium transition-colors shadow-sm" pendingText="Approving...">
-                            <CheckCircle className="w-4 h-4 mr-1.5" /> Approve
-                          </SubmitButton>
-                        </form>
+                        {event.form_type === 'survey' ? (
+                          <Dialog>
+                            <DialogTrigger render={<Button size="sm" className="bg-[#34c759] hover:bg-[#2eb050] text-white rounded-full px-5 h-9 font-medium transition-colors shadow-sm" />}>
+                              <CheckCircle className="w-4 h-4 mr-1.5" /> Reply
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[500px]">
+                              <DialogHeader>
+                                <DialogTitle>Send Message to {reg.full_name}</DialogTitle>
+                                <DialogDescription>
+                                  This will send an email with your custom message and mark the response as processed.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <form action={replyToSurveyRegistration.bind(null, reg.id, eventId)}>
+                                <div className="py-4">
+                                  <Label htmlFor={`message-${reg.id}`} className="text-sm font-medium text-gray-700">Message</Label>
+                                  <Textarea id={`message-${reg.id}`} name="custom_message" placeholder="Type your response here..." required className="mt-1.5 rounded-xl bg-gray-50/50 min-h-[150px]" />
+                                </div>
+                                <DialogFooter>
+                                  <DialogClose render={<Button type="button" variant="outline" className="rounded-xl" />}>
+                                    Cancel
+                                  </DialogClose>
+                                  <SubmitButton className="rounded-xl bg-[#ddfe55] hover:bg-[#cbf044] text-[#1d1d1f]" pendingText="Sending...">
+                                    Send Message
+                                  </SubmitButton>
+                                </DialogFooter>
+                              </form>
+                            </DialogContent>
+                          </Dialog>
+                        ) : (
+                          <form action={approveRegistration.bind(null, reg.id, eventId)}>
+                            <SubmitButton size="sm" className="bg-[#34c759] hover:bg-[#2eb050] text-white rounded-full px-5 h-9 font-medium transition-colors shadow-sm" pendingText="Approving...">
+                              <CheckCircle className="w-4 h-4 mr-1.5" /> Approve
+                            </SubmitButton>
+                          </form>
+                        )}
                         <form action={rejectRegistration.bind(null, reg.id, eventId)}>
                           <SubmitButton variant="outline" size="sm" className="text-[#ff3b30] border-[#ff3b30]/20 hover:bg-[#ff3b30]/10 rounded-full px-5 h-9 font-medium transition-colors" pendingText="Rejecting...">
                             <XCircle className="w-4 h-4 mr-1.5" /> Reject

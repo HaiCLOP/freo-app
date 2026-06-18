@@ -262,3 +262,116 @@ export async function rejectRegistration(registrationId: string, eventId: string
 
   revalidatePath(`/dashboard/events/${eventId}/registrations`);
 }
+
+export async function replyToSurveyRegistration(registrationId: string, eventId: string, formData: FormData) {
+  const customMessage = formData.get("custom_message") as string;
+  if (!customMessage || customMessage.trim().length === 0) return;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("Unauthorized");
+
+  // Verify ownership
+  const { data: event } = await supabase
+    .from("events")
+    .select("creator_id, name, google_sheet_id, form_type")
+    .eq("id", eventId)
+    .single();
+
+  if (event?.creator_id !== user.id) throw new Error("Unauthorized");
+
+  const now = new Date().toISOString();
+
+  // Update status
+  const { data: reg, error } = await supabase
+    .from("registrations")
+    .update({ 
+      status: "approved", // Mark as approved internally to maintain stats
+      approved_at: now
+    })
+    .eq("id", registrationId)
+    .eq("event_id", eventId)
+    .select("*")
+    .single();
+
+  if (error || !reg) {
+    console.error("Failed to reply:", error);
+    return;
+  }
+
+  // Update Google Sheet if enabled
+  if (event.google_sheet_id) {
+    const formattedApprovedAt = new Date(now).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    await updateRowStatusInSheet(
+      user.id,
+      event.google_sheet_id,
+      reg.utr_id || "",
+      "Replied",
+      formattedApprovedAt,
+      reg.email,
+      reg.full_name
+    );
+  }
+
+  // Sanitize user inputs to prevent HTML injection in emails
+  const escapeHTML = (str: string) => str.replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
+  
+  // Format the custom message keeping line breaks
+  const formattedMessage = escapeHTML(customMessage).replace(/\n/g, '<br>');
+
+  // Send Reply Email
+  try {
+    await sendEmail({
+      from: process.env.RESEND_FROM_EMAIL!,
+      to: reg.email,
+      subject: `Response Received - ${escapeHTML(event.name)}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { margin: 0; padding: 0; background-color: #121212; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+            .container { max-width: 600px; margin: 40px auto; background-color: #1d1d1f; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+            .header { background-color: #ddfe55; padding: 40px 20px; text-align: center; }
+            .header h1 { margin: 0; color: #1d1d1f; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+            .content { padding: 40px; color: #ffffff; }
+            .content p { font-size: 16px; line-height: 1.6; color: #a1a1aa; margin-bottom: 24px; }
+            .content strong { color: #ffffff; }
+            .message-box { background-color: #2a2b2f; border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; margin: 30px 0; color: #e4e4e7; line-height: 1.6; }
+            .footer { padding: 30px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05); }
+            .footer p { margin: 0; color: #71717a; font-size: 14px; }
+            .brand { color: #ddfe55; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+               <h1>Response from ${escapeHTML(event.name)}</h1>
+            </div>
+            <div class="content">
+              <p>Hi <strong>${escapeHTML(reg.full_name)}</strong>,</p>
+              <p>The organizer has reviewed your submission and sent you the following message:</p>
+              
+              <div class="message-box">
+                ${formattedMessage}
+              </div>
+            </div>
+            <div class="footer">
+              <p>Powered by <span class="brand">Freo</span></p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    });
+  } catch (emailErr) {
+    console.error("Failed to send survey reply email:", emailErr);
+  }
+
+  revalidatePath(`/dashboard/events/${eventId}/registrations`);
+}
