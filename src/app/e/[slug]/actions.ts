@@ -254,7 +254,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       }
     }
 
-    const sheetRow = [
+    const sheetRow: any[] = [
       full_name,
       phone,
       email,
@@ -264,6 +264,25 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       "", // Approved At is empty for now
       publicScreenshotUrl || ""
     ];
+
+    if (formConfig && Array.isArray(formConfig)) {
+      for (const field of formConfig) {
+        if (["name", "phone", "email"].includes(field.id)) continue;
+        if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
+        
+        let val = custom_fields[field.id];
+        if (val === undefined || val === null) {
+          val = "";
+        } else if (typeof val === 'object') {
+          val = JSON.stringify(val);
+        } else if (typeof val === 'boolean') {
+          val = val ? "Yes" : "No";
+        } else {
+          val = String(val);
+        }
+        sheetRow.push(val);
+      }
+    }
 
     // Try direct write first
     try {

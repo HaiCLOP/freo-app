@@ -305,3 +305,46 @@ export async function updateRowStatusInSheet(
     throw error;
   }
 }
+
+/**
+ * Synchronize the Google Sheet headers with the latest dynamic form configuration.
+ * Retains the 8 standard columns and dynamically appends custom field labels.
+ */
+export async function syncSheetHeaders(creatorId: string, spreadsheetId: string, formConfig: any[]) {
+  if (!spreadsheetId) return;
+
+  try {
+    const { auth } = await getGoogleAuth(creatorId);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const headers = [
+      "Name",
+      "Phone",
+      "Email",
+      "UTR ID",
+      "Status",
+      "Registered At",
+      "Approved At",
+      "Payment Screenshot URL",
+    ];
+
+    if (formConfig && Array.isArray(formConfig)) {
+      for (const field of formConfig) {
+        if (["name", "phone", "email"].includes(field.id)) continue;
+        if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
+        headers.push(field.label || field.id);
+      }
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Registrations!A1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [headers],
+      },
+    });
+  } catch (error) {
+    console.error("Failed to sync sheet headers:", error);
+  }
+}
