@@ -51,11 +51,8 @@ export async function uploadFile(
       const result = await uploadToDrive(creatorId, eventSlug, category, fileName, file, isPublic);
       return result.url;
     } catch (googleError: any) {
-      if (googleError?.message === "unauthorized_client" || googleError?.message?.includes("invalid_grant")) {
-        throw new Error("The event organizer's Google Drive connection has expired. They must reconnect their Google account in the dashboard to receive files.");
-      }
-      console.error("Google Drive upload failed:", googleError);
-      throw new Error("Failed to upload file to Google Drive. Please try again.");
+      console.error("Google Drive upload failed, falling back to Supabase Storage:", googleError?.message);
+      // Fall through to Supabase Storage below instead of throwing
     }
   }
 

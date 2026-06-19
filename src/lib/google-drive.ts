@@ -32,9 +32,14 @@ async function getDriveClient(creatorId: string) {
     throw new Error("Google account not connected. Please connect in Settings.");
   }
 
+  const redirectUri = process.env.NODE_ENV === "production" 
+    ? "https://freo.haicloplabs.in/api/google/callback"
+    : "http://localhost:3000/api/google/callback";
+
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
+    process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri
   );
 
   oauth2Client.setCredentials({
@@ -56,6 +61,20 @@ async function getDriveClient(creatorId: string) {
         .eq("id", creatorId);
     }
   });
+
+  // Proactively refresh token
+  try {
+    const tokenInfo = await oauth2Client.getAccessToken();
+    if (tokenInfo.token && tokenInfo.token !== creator.google_access_token) {
+      const sb = await createClient();
+      await sb.from("creators").update({
+        google_access_token: tokenInfo.token,
+        google_token_updated_at: new Date().toISOString(),
+      }).eq("id", creatorId);
+    }
+  } catch (refreshError: any) {
+    console.error("Failed to refresh Google Drive token:", refreshError?.message);
+  }
 
   const drive = google.drive({ version: "v3", auth: oauth2Client });
 
