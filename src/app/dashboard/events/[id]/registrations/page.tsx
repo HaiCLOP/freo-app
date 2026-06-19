@@ -372,13 +372,11 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
                             </SubmitButton>
                           </form>
                         )}
-                        {event.form_type !== 'survey' && (
-                          <form action={rejectRegistration.bind(null, reg.id, eventId)}>
-                            <SubmitButton variant="outline" size="sm" className="text-[#ff3b30] border-[#ff3b30]/20 hover:bg-[#ff3b30]/10 rounded-full px-5 h-9 font-medium transition-colors" pendingText="Rejecting...">
-                              <XCircle className="w-4 h-4 mr-1.5" /> Reject
-                            </SubmitButton>
-                          </form>
-                        )}
+                        <form action={rejectRegistration.bind(null, reg.id, eventId)}>
+                          <SubmitButton variant="outline" size="sm" className="text-[#ff3b30] border-[#ff3b30]/20 hover:bg-[#ff3b30]/10 rounded-full px-5 h-9 font-medium transition-colors" pendingText="Rejecting...">
+                            <XCircle className="w-4 h-4 mr-1.5" /> Reject
+                          </SubmitButton>
+                        </form>
                       </>
                     ) : (
                       <Button variant="outline" size="sm" disabled className="rounded-full px-6 h-9 opacity-50 bg-[#f5f5f7] border-transparent font-medium">
