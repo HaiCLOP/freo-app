@@ -196,7 +196,7 @@ export async function autoCreateSheet(
 export async function appendRowToSheet(
   creatorId: string,
   spreadsheetId: string,
-  values: (string | number | boolean | null)[]
+  values: (string | number | boolean | null)[] | Record<string, any>
 ) {
   if (!spreadsheetId) return;
 
@@ -204,9 +204,32 @@ export async function appendRowToSheet(
     const { auth } = await getGoogleAuth(creatorId);
     const sheets = google.sheets({ version: "v4", auth });
 
+    let finalArray: any[] = [];
+
+    if (!Array.isArray(values)) {
+      // It's a Record. Fetch headers to map it correctly.
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: "Registrations!1:1",
+      });
+      const headers = headerRes.data.values?.[0] || [];
+      
+      finalArray = headers.map(header => {
+        const val = values[header];
+        return val !== undefined && val !== null ? val : "";
+      });
+
+      if (headers.length === 0) {
+        // Fallback if headers are completely missing
+        finalArray = Object.values(values);
+      }
+    } else {
+      finalArray = values; // Legacy array fallback
+    }
+
     // Sanitize values to prevent Spreadsheet Formula Injection (CSV Injection)
     // Any value starting with =, +, -, or @ could be interpreted as a formula.
-    const sanitizedValues = values.map(val => {
+    const sanitizedValues = finalArray.map(val => {
       if (typeof val === 'string') {
         // Allow explicit IMAGE and HYPERLINK formulas for screenshots
         if (val.startsWith('=IMAGE(') || val.startsWith('=HYPERLINK(')) {
@@ -221,7 +244,7 @@ export async function appendRowToSheet(
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "Registrations!A:J",
+      range: "Registrations!A:Z", // Changed to Z to allow for more custom fields
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [sanitizedValues],

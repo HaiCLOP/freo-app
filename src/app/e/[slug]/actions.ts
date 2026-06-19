@@ -175,7 +175,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
         try {
           const uploadedRef = await uploadFile(
             event.creator_id, eventSlug, "custom-files",
-            `${Date.now()}-${field.id}.${ext}`, file, false
+            `${Date.now()}-${field.id}.${ext}`, file, true
           );
           custom_fields[field.id] = uploadedRef;
         } catch (uploadError: any) {
@@ -254,19 +254,17 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       }
     }
 
-    const sheetRow: any[] = [
-      full_name,
-      phone,
-      email,
-    ];
+    const sheetRowData: Record<string, any> = {
+      "Name": full_name,
+      "Phone": phone,
+      "Email": email,
+      "Status": isWaitlisted ? "Waitlisted" : "Pending",
+      "Registered At": registeredAt,
+      "Approved At": "",
+    };
     if (event.form_type !== 'survey') {
-      sheetRow.push(utr_id || "");
-    }
-    sheetRow.push(isWaitlisted ? "Waitlisted" : "Pending");
-    sheetRow.push(registeredAt);
-    sheetRow.push(""); // Approved At
-    if (event.form_type !== 'survey') {
-      sheetRow.push(publicScreenshotUrl || "");
+      sheetRowData["UTR ID"] = utr_id || "";
+      sheetRowData["Payment Screenshot URL"] = publicScreenshotUrl || "";
     }
 
     if (formConfig && Array.isArray(formConfig)) {
@@ -302,21 +300,21 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
         } else {
           val = String(val);
         }
-        sheetRow.push(val);
+        sheetRowData[field.label] = val;
       }
     }
 
     // Try direct write first
     try {
       const { appendRowToSheet } = await import("@/lib/google-sheets");
-      await appendRowToSheet(event.creator_id, event.google_sheet_id, sheetRow);
+      await appendRowToSheet(event.creator_id, event.google_sheet_id, sheetRowData);
     } catch (sheetError) {
       console.error("Direct sheet write failed, queuing:", sheetError);
       // Fallback: queue for cron processing
       await supabase.from("sheet_queue").insert({
         sheet_id: event.google_sheet_id,
         creator_id: event.creator_id,
-        row_data: sheetRow,
+        row_data: sheetRowData,
         status: "pending",
       });
     }

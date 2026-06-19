@@ -167,11 +167,12 @@ export async function uploadToDrive(
   const eventFolderId = await ensureEventFolder(creatorId, eventSlug);
   const { drive } = await getDriveClient(creatorId);
 
-  // For payment screenshots, create a sub-subfolder
+  // For payment screenshots and custom files, create sub-subfolders
   let parentId = eventFolderId;
-  if (category === "payment-screenshots") {
+  if (category === "payment-screenshots" || category === "custom-files") {
+    const folderName = category === "payment-screenshots" ? "Payment Screenshots" : "Custom Uploads";
     const searchRes = await drive.files.list({
-      q: `name='Payment Screenshots' and '${eventFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      q: `name='${folderName}' and '${eventFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       spaces: "drive",
       fields: "files(id)",
     });
@@ -181,7 +182,7 @@ export async function uploadToDrive(
     } else {
       const subFolder = await drive.files.create({
         requestBody: {
-          name: "Payment Screenshots",
+          name: folderName,
           mimeType: "application/vnd.google-apps.folder",
           parents: [eventFolderId],
         },
@@ -250,8 +251,8 @@ export async function getDriveImageUrl(
       fields: "id, shared, webContentLink, webViewLink, thumbnailLink",
     });
 
-    if (file.data.shared && file.data.webContentLink) {
-      return file.data.webContentLink;
+    if (file.data.shared && file.data.webViewLink) {
+      return file.data.webViewLink;
     }
 
     // It's private. The webViewLink requires auth and won't work in an <img> tag.

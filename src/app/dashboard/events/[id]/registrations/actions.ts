@@ -168,7 +168,7 @@ export async function rejectRegistration(registrationId: string, eventId: string
   // Verify ownership
   const { data: event } = await supabase
     .from("events")
-    .select("creator_id, name, google_sheet_id")
+    .select("creator_id, name, google_sheet_id, form_type")
     .eq("id", eventId)
     .single();
 
@@ -246,7 +246,10 @@ export async function rejectRegistration(registrationId: string, eventId: string
                 <p class="status-text">Registration Rejected</p>
               </div>
               
-              <p>This is usually because the payment screenshot could not be verified or the UTR ID did not match our records. Please contact the event organizer if you believe this is a mistake and wish to re-register.</p>
+              ${event.form_type === 'survey' 
+                ? `<p>Please contact the organizer if you believe this is a mistake and wish to submit again.</p>`
+                : `<p>This is usually because the payment screenshot could not be verified or the UTR ID did not match our records. Please contact the event organizer if you believe this is a mistake and wish to re-register.</p>`
+              }
             </div>
             <div class="footer">
               <p>Powered by <span class="brand">Freo</span></p>
