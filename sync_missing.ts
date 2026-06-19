@@ -24,13 +24,10 @@ async function run() {
       });
       
       const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-      const res = await sheets.spreadsheets.get({ spreadsheetId: event.google_sheet_id });
-      console.log(`  -> SUCCESS! Title: ${res.data.properties?.title}`);
       
       // Let's get all registrations for this event
       const { data: registrations } = await supabase.from('registrations').select('*').eq('event_id', event.id).order('registered_at', { ascending: true });
       if (!registrations || registrations.length === 0) {
-        console.log(`  -> No registrations found in DB.`);
         continue;
       }
       
@@ -40,44 +37,67 @@ async function run() {
         range: "Registrations!1:1",
       });
       const headers = headerRes.data.values?.[0] || [];
-      console.log(`  -> Sheet headers: ${headers.join(', ')}`);
       
-      // Read all existing rows to see who is already there
+      // Read all existing rows
       const existingRes = await sheets.spreadsheets.values.get({
         spreadsheetId: event.google_sheet_id,
         range: "Registrations!A:Z",
       });
       const existingRows = existingRes.data.values || [];
-      // Let's assume Email is unique, or UTR ID
       const emailColIndex = headers.findIndex((h: string) => h.toLowerCase() === 'email');
-      let existingEmails = new Set<string>();
-      if (emailColIndex >= 0) {
-        for (let i = 1; i < existingRows.length; i++) {
-          if (existingRows[i][emailColIndex]) {
-            existingEmails.add(existingRows[i][emailColIndex].toString().trim().toLowerCase());
-          }
-        }
-      }
+      const nameColIndex = headers.findIndex((h: string) => h.toLowerCase() === 'name');
       
-      console.log(`  -> Found ${existingEmails.size} unique emails in sheet. DB has ${registrations.length} registrations.`);
+      const formConfig = event.form_config || [];
       
-      let syncedCount = 0;
       for (const reg of registrations) {
         const email = reg.email.toLowerCase().trim();
-        if (!existingEmails.has(email)) {
-          // It's missing! Let's build the row and append
+        
+        // Find if this email is already in the sheet
+        let existingRowIndex = -1;
+        if (emailColIndex >= 0) {
+          for (let i = 1; i < existingRows.length; i++) {
+            if (existingRows[i][emailColIndex] && existingRows[i][emailColIndex].toString().trim().toLowerCase() === email) {
+              existingRowIndex = i;
+              break;
+            }
+          }
+        }
+        
+        // If it exists, but Name is missing, it was a bad sync. Let's update it!
+        // If it doesn't exist, we append it.
+        const isMissingName = existingRowIndex !== -1 && nameColIndex >= 0 && !existingRows[existingRowIndex][nameColIndex];
+        
+        if (existingRowIndex === -1 || isMissingName) {
           const customFields = typeof reg.custom_fields === 'string' ? JSON.parse(reg.custom_fields) : (reg.custom_fields || {});
+          
+          // Map custom fields to their labels!
+          const mappedCustomFields: Record<string, any> = {};
+          for (const field of formConfig) {
+            if (customFields[field.id] !== undefined) {
+              let val = customFields[field.id];
+              // Recreate the logic from actions.ts
+              if (field.type === 'file' || field.type === 'file_upload') {
+                val = `=HYPERLINK("https://freo-events.vercel.app/api/storage/proxy?path=${val}", "View File")`;
+              } else if (field.type === 'checkbox_grid') {
+                val = Object.entries(val).map(([row, cols]) => `${row}: ${(cols as string[]).join(', ')}`).join(' | ');
+              } else if (field.type === 'checkbox') {
+                val = val ? "Yes" : "No";
+              }
+              mappedCustomFields[field.label || field.id] = val;
+            }
+          }
+          
           const rowData: Record<string, any> = {
-            "Timestamp": new Date(reg.registered_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-            "Full Name": reg.full_name,
+            "Registered At": new Date(reg.registered_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+            "Name": reg.full_name,
             "Email": reg.email,
             "Phone": reg.phone,
             "Status": reg.status,
-            ...customFields
+            ...mappedCustomFields
           };
           if (event.form_type !== 'survey') {
             rowData["UTR ID"] = reg.utr_id || "";
-            rowData["Payment Screenshot"] = reg.payment_screenshot_url ? `=HYPERLINK("${reg.payment_screenshot_url}", "View Payment")` : "";
+            rowData["Payment Screenshot URL"] = reg.payment_screenshot_url ? `=HYPERLINK("${reg.payment_screenshot_url.replace(/"/g, '')}", "View Payment")` : "";
           }
           
           let finalArray = headers.map((h: string) => {
@@ -85,22 +105,29 @@ async function run() {
             return val !== undefined && val !== null ? val : "";
           });
           
-          if (headers.length === 0) finalArray = Object.values(rowData);
-          
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: event.google_sheet_id,
-            range: "Registrations!A:Z",
-            valueInputOption: "USER_ENTERED",
-            requestBody: { values: [finalArray] },
-          });
-          console.log(`  -> Synced missing registration: ${email}`);
-          syncedCount++;
+          if (existingRowIndex === -1) {
+            await sheets.spreadsheets.values.append({
+              spreadsheetId: event.google_sheet_id,
+              range: "Registrations!A:Z",
+              valueInputOption: "USER_ENTERED",
+              requestBody: { values: [finalArray] },
+            });
+            console.log(`  -> APPENDED missing registration: ${email}`);
+          } else if (isMissingName) {
+            const rowNum = existingRowIndex + 1;
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: event.google_sheet_id,
+              range: `Registrations!A${rowNum}`,
+              valueInputOption: "USER_ENTERED",
+              requestBody: { values: [finalArray] },
+            });
+            console.log(`  -> UPDATED incomplete registration: ${email}`);
+          }
         }
       }
-      console.log(`  -> Synced ${syncedCount} missing registrations.`);
       
     } catch (err: any) {
-      console.error(`  -> ERROR testing sheet access: ${err.message}`);
+      console.error(`  -> ERROR processing event ${event.name}: ${err.message}`);
     }
   }
 }
