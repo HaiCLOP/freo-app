@@ -351,8 +351,8 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
         ) : null}
       </div>
 
-      {/* Mandatory Payment Section - Only show on last page if paid event */}
-      {isLastPage && event.price > 0 && (
+      {/* Mandatory Payment Section - Only show on last page if paid event and not a survey */}
+      {isLastPage && event.price > 0 && event.form_type !== 'survey' && (
         <div className="space-y-6">
           <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
           <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
