@@ -181,6 +181,16 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
                 type={field.type === "phone" ? "tel" : field.type} 
                 placeholder={field.placeholder} 
                 required={isRequiredOnCurrentPage}
+                {...(field.type === "phone" ? {
+                  maxLength: 10,
+                  pattern: "[0-9]{10}",
+                  title: "Please enter a valid 10-digit phone number",
+                  inputMode: "numeric" as const,
+                  onInput: (e: React.FormEvent<HTMLInputElement>) => {
+                    const target = e.target as HTMLInputElement;
+                    target.value = target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                  }
+                } : {})}
                 onChange={(e) => handleValueChange(field.id, e.target.value)}
                 className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6"
               />

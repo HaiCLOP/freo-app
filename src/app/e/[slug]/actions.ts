@@ -10,7 +10,7 @@ import { rateLimit } from "@/lib/rate-limit";
 
 const registrationSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name is too long"),
-  phone: z.string().min(10, "Phone is too short").max(20, "Phone is too long").regex(/^[0-9+\-\s()]+$/, "Invalid phone format"),
+  phone: z.string().length(10, "Phone number must be exactly 10 digits").regex(/^[0-9]{10}$/, "Phone number must contain only digits"),
   email: z.string().email("Invalid email format").max(255, "Email is too long"),
   utr_id: z.string().max(50, "UTR is too long").optional().or(z.literal('')),
 });
