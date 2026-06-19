@@ -37,7 +37,7 @@ export async function uploadFile(
   isPublic: boolean = false
 ): Promise<string> {
   // Check if creator has Google connected
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   const { data: creator } = await supabase
     .from("creators")
     .select("google_access_token")
