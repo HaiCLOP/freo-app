@@ -75,7 +75,7 @@ async function getDriveClient(creatorId: string) {
   try {
     const tokenInfo = await oauth2Client.getAccessToken();
     if (tokenInfo.token && tokenInfo.token !== creator.google_access_token) {
-      const sb = await createClient();
+      const sb = getAdminClient();
       await sb.from("creators").update({
         google_access_token: tokenInfo.token,
         google_token_updated_at: new Date().toISOString(),
@@ -118,7 +118,7 @@ async function ensureRootFolder(creatorId: string): Promise<string> {
   if (searchRes.data.files && searchRes.data.files.length > 0) {
     const existingId = searchRes.data.files[0].id!;
     // Save for future use
-    const supabase = await createClient();
+    const supabase = getAdminClient();
     await supabase
       .from("creators")
       .update({ google_drive_folder_id: existingId })
@@ -138,7 +138,7 @@ async function ensureRootFolder(creatorId: string): Promise<string> {
   const newFolderId = folderRes.data.id!;
 
   // Save to DB
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   await supabase
     .from("creators")
     .update({ google_drive_folder_id: newFolderId })

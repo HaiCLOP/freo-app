@@ -73,7 +73,7 @@ async function getGoogleAuth(creatorId: string) {
       const tokenInfo = await oauth2Client.getAccessToken();
       if (tokenInfo.token && tokenInfo.token !== creator.google_access_token) {
         // Token was refreshed, save it
-        const sb = await createClient();
+        const sb = getAdminClient();
         await sb.from("creators").update({
           google_access_token: tokenInfo.token,
           google_token_updated_at: new Date().toISOString(),
