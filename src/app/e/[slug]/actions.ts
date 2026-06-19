@@ -306,7 +306,9 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
 
     // Try direct write first
     try {
-      const { appendRowToSheet } = await import("@/lib/google-sheets");
+      const { appendRowToSheet, syncSheetHeaders } = await import("@/lib/google-sheets");
+      // Ensure headers match current form config before appending
+      await syncSheetHeaders(event.creator_id, event.google_sheet_id, formConfig, event.form_type || 'event');
       await appendRowToSheet(event.creator_id, event.google_sheet_id, sheetRowData);
     } catch (sheetError) {
       console.error("Direct sheet write failed, queuing:", sheetError);
