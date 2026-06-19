@@ -135,6 +135,17 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
 
   return (
     <>
+      {/* Hidden inputs to ensure all field values are submitted regardless of page visibility */}
+      {Object.entries(formValues).map(([fieldId, value]) => {
+        // Skip file fields — they're handled by their own input
+        const fieldConfig = formConfig.find((f: any) => f.id === fieldId);
+        if (fieldConfig?.type === 'file' || fieldConfig?.type === 'file_upload') return null;
+        if (value === undefined || value === null) return null;
+        return (
+          <input key={`hidden_${fieldId}`} type="hidden" name={fieldId} value={String(value)} />
+        );
+      })}
+
       {/* Dynamic Fields */}
       {pages.map((pageFields, pageIndex) => (
         <div key={pageIndex} className={pageIndex === currentPage ? "space-y-8 block" : "hidden"}>
