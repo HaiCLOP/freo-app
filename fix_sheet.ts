@@ -5,66 +5,44 @@ import { google } from 'googleapis';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-async function getAuth(creator: any) {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-  oauth2Client.setCredentials({
-    access_token: creator.google_access_token,
-    refresh_token: creator.google_refresh_token,
-  });
-
-  // Force a token refresh
-  try {
-    const { credentials } = await oauth2Client.refreshAccessToken();
-    oauth2Client.setCredentials(credentials);
-    
-    // Save new tokens back to DB
-    if (credentials.access_token) {
-      await supabase.from('creators').update({
-        google_access_token: credentials.access_token,
-        google_refresh_token: credentials.refresh_token || creator.google_refresh_token,
-      }).eq('id', creator.id);
-      console.log("  -> Refreshed and saved new access token");
-    }
-  } catch (e: any) {
-    console.log("  -> Token refresh failed, trying with existing token:", e.message);
-  }
-
-  return oauth2Client;
-}
-
 async function run() {
   const { data: events } = await supabase
     .from('events')
-    .select('*, creators(*)')
-    .not('google_sheet_id', 'is', null);
+    .select('id, name, slug, form_type, form_config, google_sheet_id, creators(google_access_token, google_refresh_token)')
+    .not('google_sheet_id', 'is', null)
+    .order('created_at', { ascending: true });
 
-  if (!events || events.length === 0) return;
+  if (!events) return;
 
   for (const event of events) {
-    if (event.google_sheet_id !== '13cH6zgpn1kko3LZKaVRxYGYQciUowS9NGTLkEItEgGA') continue;
+    console.log(`\n=== Rebuilding: ${event.slug} ===`);
+    
+    const creators = event.creators as any;
+    const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
+    oauth2Client.setCredentials({
+      access_token: creators.google_access_token,
+      refresh_token: creators.google_refresh_token,
+    });
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
-    console.log(`\n=== Fixing Sheet for: ${event.name} ===`);
-    console.log(`Form type: ${event.form_type}`);
+    const formConfig = (event.form_config as any[]) || [];
+    const formType = event.form_type || 'event';
 
-    const auth = await getAuth(event.creators);
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    // 1. Build correct headers for a survey (no UTR ID, no Payment Screenshot URL)
-    const formConfig = event.form_config || [];
-    const newHeaders: string[] = ["Name", "Phone", "Email", "Status", "Registered At", "Approved At"];
+    // Build correct headers
+    const headers: string[] = ["Name", "Phone", "Email"];
+    if (formType !== 'survey') headers.push("UTR ID");
+    headers.push("Status", "Registered At", "Approved At");
+    if (formType !== 'survey') headers.push("Payment Screenshot URL");
 
     for (const field of formConfig) {
       if (["name", "phone", "email"].includes(field.id)) continue;
       if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
-      newHeaders.push(field.label || field.id);
+      headers.push(field.label || field.id);
     }
 
-    console.log(`New headers (${newHeaders.length}):`, newHeaders.map((h, i) => `${i}: ${h.substring(0, 40)}`));
+    console.log(`  Headers: ${headers.length} columns`);
 
-    // 2. Fetch all registrations from DB
+    // Fetch registrations
     const { data: registrations } = await supabase
       .from('registrations')
       .select('*')
@@ -72,34 +50,34 @@ async function run() {
       .order('registered_at', { ascending: true });
 
     if (!registrations || registrations.length === 0) {
-      console.log("No registrations to sync.");
+      console.log("  No registrations.");
       continue;
     }
 
-    console.log(`Found ${registrations.length} registrations in DB.`);
-
-    // 3. Build all rows
+    // Build rows
     const allRows: any[][] = [];
     for (const reg of registrations) {
-      const customFields =
-        typeof reg.custom_fields === 'string'
-          ? JSON.parse(reg.custom_fields)
-          : reg.custom_fields || {};
+      const customFields = typeof reg.custom_fields === 'string'
+        ? JSON.parse(reg.custom_fields)
+        : reg.custom_fields || {};
 
       const rowData: Record<string, any> = {
         Name: reg.full_name,
         Phone: reg.phone,
         Email: reg.email,
-        Status: reg.status === 'approved' ? 'Replied' : reg.status,
-        "Registered At": new Date(reg.registered_at).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-        }),
+        Status: reg.status === 'approved' && formType === 'survey' ? 'Replied' : reg.status,
+        "Registered At": new Date(reg.registered_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
         "Approved At": reg.approved_at
           ? new Date(reg.approved_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
           : '',
       };
 
-      // Map custom fields by matching field.id -> field.label
+      if (formType !== 'survey') {
+        rowData["UTR ID"] = reg.utr_id || '';
+        rowData["Payment Screenshot URL"] = reg.payment_screenshot_url || '';
+      }
+
+      // Map custom fields by field.id -> field.label
       for (const field of formConfig) {
         if (["name", "phone", "email"].includes(field.id)) continue;
         if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
@@ -110,12 +88,8 @@ async function run() {
         if (val === undefined || val === null) {
           rowData[label] = '';
         } else if ((field.type === 'file' || field.type === 'file_upload') && val) {
-          const fileUrl = `https://freo-events.vercel.app/api/storage/proxy?path=${encodeURIComponent(val)}`;
+          const fileUrl = `https://freo-events.vercel.app/api/storage/proxy?path=${encodeURIComponent(String(val))}`;
           rowData[label] = `=HYPERLINK("${fileUrl}", "View File")`;
-        } else if (field.type === 'checkbox_grid' && typeof val === 'object') {
-          rowData[label] = Object.entries(val)
-            .map(([row, cols]) => `${row}: ${(cols as string[]).join(', ')}`)
-            .join(' | ');
         } else if (typeof val === 'boolean') {
           rowData[label] = val ? 'Yes' : 'No';
         } else if (typeof val === 'object') {
@@ -125,34 +99,33 @@ async function run() {
         }
       }
 
-      // Map to array in header order
-      const row = newHeaders.map((h) => {
+      const row = headers.map(h => {
         const v = rowData[h];
         return v !== undefined && v !== null ? v : '';
       });
-
       allRows.push(row);
-      console.log(`  Built row for: ${reg.full_name} (${reg.email})`);
     }
 
-    // 4. Clear the entire sheet first
-    console.log("Clearing sheet...");
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId: event.google_sheet_id,
-      range: "Registrations!A:Z",
-    });
+    console.log(`  Built ${allRows.length} rows`);
 
-    // 5. Write new headers + all rows
-    const allValues = [newHeaders, ...allRows];
-    console.log(`Writing ${allValues.length} rows (1 header + ${allRows.length} data)...`);
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: event.google_sheet_id,
-      range: "Registrations!A1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: allValues },
-    });
+    // Clear sheet and rewrite
+    try {
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: event.google_sheet_id!,
+        range: "Registrations!A:Z",
+      });
 
-    console.log("✅ Sheet fully rebuilt!");
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: event.google_sheet_id!,
+        range: "Registrations!A1",
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: [headers, ...allRows] },
+      });
+
+      console.log(`  ✅ Sheet rebuilt with ${allRows.length} rows!`);
+    } catch (e: any) {
+      console.error(`  ❌ Failed: ${e.message}`);
+    }
   }
 }
 
