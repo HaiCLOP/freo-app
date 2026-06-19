@@ -1,5 +1,14 @@
 import { google } from "googleapis";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+
+// Admin client bypasses RLS - needed because public visitors don't have auth sessions
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /**
  * Google Sheets + Drive utility using the creator's OAuth tokens.
@@ -20,7 +29,7 @@ import { createClient } from "@/lib/supabase/server";
  * Falls back to service account if no OAuth tokens exist.
  */
 async function getGoogleAuth(creatorId: string) {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   const { data: creator } = await supabase
     .from("creators")
     .select("google_access_token, google_refresh_token")
@@ -47,7 +56,7 @@ async function getGoogleAuth(creatorId: string) {
     // Auto-refresh: save new tokens when refreshed
     oauth2Client.on("tokens", async (tokens) => {
       if (tokens.access_token) {
-        const sb = await createClient();
+        const sb = getAdminClient();
         await sb
           .from("creators")
           .update({
