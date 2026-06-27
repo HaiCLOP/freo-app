@@ -294,6 +294,7 @@ export async function getDriveImageUrl(
     return file.data.webViewLink || `https://drive.google.com/file/d/${fileIdOrUrl}/view`;
   } catch (error) {
     console.error("Failed to get Drive image URL:", error);
-    return "";
+    // Fallback: If API fails (e.g. eventual consistency right after upload), return a standard view link
+    return `https://drive.google.com/file/d/${fileIdOrUrl}/view`;
   }
 }
