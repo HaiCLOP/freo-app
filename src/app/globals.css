@@ -39,6 +39,35 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* MindMarket Colors */
+  --color-fresh-grass: #8ed462;
+  --color-cream-paper: #f5f1e4;
+  --color-ink-black: #2c2e2a;
+  --color-pure-white: #ffffff;
+  --color-sandstone: #e0dbce;
+  --color-stone-gray: #80827f;
+  --color-hairline-mist: #d5d5d4;
+  --color-pure-ink: #000000;
+  --color-sky-pop: #2ba0ff;
+  --color-coral-pop: #ff705d;
+  --color-sunshine-pop: #f5e211;
+
+  /* MindMarket Typography Ext */
+  --text-body-sm: 15px;
+  --text-body-lg: 18px;
+  --text-subheading: 20px;
+  --text-heading-sm: 30px;
+  --text-heading: 53px;
+  --text-heading-lg: 81px;
+  --text-display: 140px;
+  --text-display-lg: 144px;
+
+  /* MindMarket Radii */
+  --radius-nav: 50px;
+  --radius-cards: 50px;
+  --radius-buttons: 50px;
+  --radius-illustration: 63.75px;
 }
 
 :root {
@@ -86,6 +115,29 @@
   --ring: #DDFE55;
 }
 
+[data-theme='mindmarket'] {
+  --background: #f5f1e4;
+  --foreground: #2c2e2a;
+  --card: #ffffff;
+  --card-foreground: #2c2e2a;
+  --popover: #ffffff;
+  --popover-foreground: #2c2e2a;
+  --primary: #8ed462;
+  --primary-foreground: #2c2e2a;
+  --secondary: #e0dbce;
+  --secondary-foreground: #2c2e2a;
+  --muted: #e0dbce;
+  --muted-foreground: #80827f;
+  --accent: #f5e211;
+  --accent-foreground: #2c2e2a;
+  --destructive: #ff705d;
+  --destructive-foreground: #ffffff;
+  --border: #d5d5d4;
+  --input: #d5d5d4;
+  --ring: #8ed462;
+  --radius: 50px;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -110,6 +162,78 @@
 
 .text-gradient {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-[#1B1C20] to-[#3A3B41];
+}
+
+/* ── Neobrutalist Utilities ── */
+.neo-shadow {
+  box-shadow: 4px 4px 0px #2c2e2a;
+}
+
+.neo-shadow-lg {
+  box-shadow: 6px 6px 0px #2c2e2a;
+}
+
+.neo-shadow-xl {
+  box-shadow: 8px 8px 0px #2c2e2a;
+}
+
+.neo-shadow-color-green {
+  box-shadow: 6px 6px 0px #8ed462;
+}
+
+.neo-shadow-color-blue {
+  box-shadow: 6px 6px 0px #2ba0ff;
+}
+
+.neo-shadow-color-coral {
+  box-shadow: 6px 6px 0px #ff705d;
+}
+
+.neo-shadow-color-yellow {
+  box-shadow: 6px 6px 0px #f5e211;
+}
+
+.neo-border {
+  border: 3px solid #2c2e2a;
+}
+
+.neo-border-thick {
+  border: 4px solid #2c2e2a;
+}
+
+.neo-card {
+  border: 3px solid #2c2e2a;
+  box-shadow: 6px 6px 0px #2c2e2a;
+  border-radius: 0px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.neo-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0px #2c2e2a;
+}
+
+.neo-btn {
+  border: 3px solid #2c2e2a;
+  box-shadow: 4px 4px 0px #2c2e2a;
+  border-radius: 0px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.neo-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #2c2e2a;
+}
+
+.neo-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px #2c2e2a;
+}
+
+.neo-badge {
+  border: 2px solid #2c2e2a;
+  box-shadow: 3px 3px 0px #2c2e2a;
+  border-radius: 0px;
 }
 
 /* Minimal Custom Scrollbar */

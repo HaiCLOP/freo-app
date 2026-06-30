@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.resend_key_usage (
 );
 
 -- Enable RLS (Service role only access)
-ALTER TABLE public.resend_key_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.resend_key_usage ENABLE ROW LEVEL SECURITY;  
 
 -- Allow service role full access
 CREATE POLICY "Service role has full access on resend_key_usage" 

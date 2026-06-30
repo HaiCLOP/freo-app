@@ -40,6 +40,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Protect MUN authenticated routes
+  const munProtectedPaths = ["/mun/dashboard", "/mun/delegate", "/mun/session"];
+  if (munProtectedPaths.some((p) => request.nextUrl.pathname.startsWith(p)) && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
   // Redirect authenticated users away from /login
   if (request.nextUrl.pathname.startsWith("/login") && user) {
     const url = request.nextUrl.clone();
