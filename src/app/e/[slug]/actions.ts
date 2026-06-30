@@ -10,9 +10,9 @@ import { rateLimit } from "@/lib/rate-limit";
 
 const registrationSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name is too long"),
-  phone: z.string().min(10, "Phone is too short").max(20, "Phone is too long").regex(/^[0-9+\-\s()]+$/, "Invalid phone format"),
+  phone: z.string().length(10, "Phone number must be exactly 10 digits").regex(/^[0-9]{10}$/, "Phone number must contain only digits"),
   email: z.string().email("Invalid email format").max(255, "Email is too long"),
-  utr_id: z.string().min(4, "UTR is too short").max(50, "UTR is too long"),
+  utr_id: z.string().max(50, "UTR is too long").optional().or(z.literal('')),
 });
 
 // We now use the centralized Upstash Redis rate limiter imported above.
@@ -82,7 +82,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
     name: formData.get("name") as string,
     phone: formData.get("phone") as string,
     email: formData.get("email") as string,
-    utr_id: formData.get("utr_id") as string,
+    utr_id: (formData.get("utr_id") as string) || "",
   };
 
   const validationResult = registrationSchema.safeParse(rawData);
@@ -94,15 +94,17 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   const { name: full_name, phone, email, utr_id } = validationResult.data;
   
   // PRE-VALIDATION: Block duplicate UTRs before burning upload quota
-  const { data: existingReg } = await supabase
-    .from("registrations")
-    .select("id")
-    .eq("event_id", eventId)
-    .eq("utr_id", utr_id)
-    .maybeSingle();
+  if (utr_id && utr_id.trim().length > 0) {
+    const { data: existingReg } = await supabase
+      .from("registrations")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("utr_id", utr_id)
+      .maybeSingle();
 
-  if (existingReg) {
-    redirect(`/e/${eventSlug}?error=Duplicate UTR ID detected. This payment reference has already been used.`);
+    if (existingReg) {
+      redirect(`/e/${eventSlug}?error=Duplicate UTR ID detected. This payment reference has already been used.`);
+    }
   }
 
   // 3. Handle File Uploads → Google Drive or Supabase Storage (auto-detected)
@@ -145,6 +147,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
   
   for (const field of formConfig) {
     if (["name", "phone", "email"].includes(field.id)) continue;
+    if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
     
     if (field.type === "file" || field.type === "file_upload") {
       const file = formData.get(field.id) as File;
@@ -172,7 +175,7 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
         try {
           const uploadedRef = await uploadFile(
             event.creator_id, eventSlug, "custom-files",
-            `${Date.now()}-${field.id}.${ext}`, file, false
+            `${Date.now()}-${field.id}.${ext}`, file, true
           );
           custom_fields[field.id] = uploadedRef;
         } catch (uploadError: any) {
@@ -251,28 +254,69 @@ export async function submitRegistration(eventId: string, eventSlug: string, for
       }
     }
 
-    const sheetRow = [
-      full_name,
-      phone,
-      email,
-      utr_id,
-      isWaitlisted ? "Waitlisted" : "Pending",
-      registeredAt,
-      "", // Approved At is empty for now
-      publicScreenshotUrl
-    ];
+    const sheetRowData: Record<string, any> = {
+      "Name": full_name,
+      "Phone": phone,
+      "Email": email,
+      "Status": isWaitlisted ? "Waitlisted" : "Pending",
+      "Registered At": registeredAt,
+      "Approved At": "",
+    };
+    if (event.form_type !== 'survey') {
+      sheetRowData["UTR ID"] = utr_id || "";
+      sheetRowData["Payment Screenshot URL"] = publicScreenshotUrl || "";
+    }
+
+    if (formConfig && Array.isArray(formConfig)) {
+      for (const field of formConfig) {
+        if (["name", "phone", "email"].includes(field.id)) continue;
+        if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
+        
+        let val = custom_fields[field.id];
+        
+        if ((field.type === "file_upload" || field.type === "file") && val) {
+          try {
+            let url = await getFileUrl(event.creator_id, val);
+            if (url) {
+              if (url.includes("drive.google.com")) {
+                const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                  url = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                }
+              }
+              const sanitizedUrl = url.replace(/"/g, '');
+              val = `=HYPERLINK("${sanitizedUrl}", "View File")`;
+            }
+          } catch (e) {
+            console.error("Failed to fetch custom file url for sheet", e);
+            val = String(val);
+          }
+        } else if (val === undefined || val === null) {
+          val = "";
+        } else if (typeof val === 'object') {
+          val = JSON.stringify(val);
+        } else if (typeof val === 'boolean') {
+          val = val ? "Yes" : "No";
+        } else {
+          val = String(val);
+        }
+        sheetRowData[field.label] = val;
+      }
+    }
 
     // Try direct write first
     try {
-      const { appendRowToSheet } = await import("@/lib/google-sheets");
-      await appendRowToSheet(event.creator_id, event.google_sheet_id, sheetRow);
+      const { appendRowToSheet, syncSheetHeaders } = await import("@/lib/google-sheets");
+      // Ensure headers match current form config before appending
+      await syncSheetHeaders(event.creator_id, event.google_sheet_id, formConfig, event.form_type || 'event');
+      await appendRowToSheet(event.creator_id, event.google_sheet_id, sheetRowData);
     } catch (sheetError) {
       console.error("Direct sheet write failed, queuing:", sheetError);
       // Fallback: queue for cron processing
       await supabase.from("sheet_queue").insert({
         sheet_id: event.google_sheet_id,
         creator_id: event.creator_id,
-        row_data: sheetRow,
+        row_data: sheetRowData,
         status: "pending",
       });
     }

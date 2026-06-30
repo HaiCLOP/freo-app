@@ -13,7 +13,7 @@ import Link from "next/link";
 import { use } from "react";
 import { saveFormConfig, getFormConfig } from "./actions";
 
-export type FieldType = "text" | "long_text" | "number" | "email" | "phone" | "dropdown" | "checkbox" | "radio" | "file_upload" | "date" | "time" | "rating" | "linear_scale" | "section_divider" | "image" | "page_break" | "checkbox_grid";
+export type FieldType = "text" | "long_text" | "number" | "email" | "phone" | "dropdown" | "checkbox" | "radio" | "file_upload" | "date" | "time" | "rating" | "linear_scale" | "section_divider" | "image" | "page_break" | "checkbox_grid" | "hyperlink";
 
 export interface FormField {
   id: string;
@@ -390,6 +390,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
                             <SelectItem value="checkbox_grid">Checkbox Grid</SelectItem>
                             <SelectItem value="section_divider">Section Divider</SelectItem>
                             <SelectItem value="page_break">Page Break</SelectItem>
+                            <SelectItem value="hyperlink">Hyperlink (External URL)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -420,13 +421,15 @@ export default function FormBuilderPage({ params }: { params: Promise<{ id: stri
                         </div>
                       )}
 
-                      {['dropdown', 'radio', 'checkbox'].includes(selectedField.type) && (
+                      {['dropdown', 'radio', 'checkbox', 'hyperlink'].includes(selectedField.type) && (
                         <div className="space-y-3">
-                          <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">Options (Comma separated)</Label>
+                          <Label className="text-xs uppercase tracking-wider font-bold text-gray-500">
+                            {selectedField.type === 'hyperlink' ? 'Target URL' : 'Options (Comma separated)'}
+                          </Label>
                           <Input 
                             value={selectedField.options || ""} 
                             onChange={(e) => updateField(selectedField.id, { options: e.target.value })}
-                            placeholder="Option 1, Option 2, Option 3"
+                            placeholder={selectedField.type === 'hyperlink' ? "https://example.com" : "Option 1, Option 2, Option 3"}
                             className="bg-white"
                           />
                         </div>

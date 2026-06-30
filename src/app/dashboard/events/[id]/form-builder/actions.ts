@@ -36,6 +36,18 @@ export async function saveFormConfig(eventId: string, config: any[], settings?: 
     return { error: "Failed to save configuration." };
   }
 
+  // Check if there is a connected Google Sheet to sync headers
+  const { data: eventData } = await supabase
+    .from("events")
+    .select("google_sheet_id")
+    .eq("id", eventId)
+    .single();
+
+  if (eventData?.google_sheet_id) {
+    const { syncSheetHeaders } = await import("@/lib/google-sheets");
+    await syncSheetHeaders(user.id, eventData.google_sheet_id, config);
+  }
+
   revalidatePath(`/dashboard/events/${eventId}/form-builder`);
   return { success: true };
 }

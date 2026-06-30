@@ -1,5 +1,14 @@
 import { google } from "googleapis";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+
+// Admin client bypasses RLS - needed because public visitors don't have auth sessions
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /**
  * Google Drive utility — stores event files in the creator's personal Drive.
@@ -21,7 +30,7 @@ import { createClient } from "@/lib/supabase/server";
  * Get an authenticated Drive client for a creator.
  */
 async function getDriveClient(creatorId: string) {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   const { data: creator } = await supabase
     .from("creators")
     .select("google_access_token, google_refresh_token, google_drive_folder_id")
@@ -32,9 +41,14 @@ async function getDriveClient(creatorId: string) {
     throw new Error("Google account not connected. Please connect in Settings.");
   }
 
+  const redirectUri = process.env.NODE_ENV === "production" 
+    ? "https://freo.haicloplabs.in/api/google/callback"
+    : "http://localhost:3000/api/google/callback";
+
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
+    process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri
   );
 
   oauth2Client.setCredentials({
@@ -45,7 +59,7 @@ async function getDriveClient(creatorId: string) {
   // Auto-refresh tokens
   oauth2Client.on("tokens", async (tokens) => {
     if (tokens.access_token) {
-      const sb = await createClient();
+      const sb = getAdminClient();
       await sb
         .from("creators")
         .update({
@@ -56,6 +70,20 @@ async function getDriveClient(creatorId: string) {
         .eq("id", creatorId);
     }
   });
+
+  // Proactively refresh token
+  try {
+    const tokenInfo = await oauth2Client.getAccessToken();
+    if (tokenInfo.token && tokenInfo.token !== creator.google_access_token) {
+      const sb = getAdminClient();
+      await sb.from("creators").update({
+        google_access_token: tokenInfo.token,
+        google_token_updated_at: new Date().toISOString(),
+      }).eq("id", creatorId);
+    }
+  } catch (refreshError: any) {
+    console.error("Failed to refresh Google Drive token:", refreshError?.message);
+  }
 
   const drive = google.drive({ version: "v3", auth: oauth2Client });
 
@@ -90,7 +118,7 @@ async function ensureRootFolder(creatorId: string): Promise<string> {
   if (searchRes.data.files && searchRes.data.files.length > 0) {
     const existingId = searchRes.data.files[0].id!;
     // Save for future use
-    const supabase = await createClient();
+    const supabase = getAdminClient();
     await supabase
       .from("creators")
       .update({ google_drive_folder_id: existingId })
@@ -110,7 +138,7 @@ async function ensureRootFolder(creatorId: string): Promise<string> {
   const newFolderId = folderRes.data.id!;
 
   // Save to DB
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   await supabase
     .from("creators")
     .update({ google_drive_folder_id: newFolderId })
@@ -167,11 +195,12 @@ export async function uploadToDrive(
   const eventFolderId = await ensureEventFolder(creatorId, eventSlug);
   const { drive } = await getDriveClient(creatorId);
 
-  // For payment screenshots, create a sub-subfolder
+  // For payment screenshots and custom files, create sub-subfolders
   let parentId = eventFolderId;
-  if (category === "payment-screenshots") {
+  if (category === "payment-screenshots" || category === "custom-files") {
+    const folderName = category === "payment-screenshots" ? "Payment Screenshots" : "Custom Uploads";
     const searchRes = await drive.files.list({
-      q: `name='Payment Screenshots' and '${eventFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      q: `name='${folderName}' and '${eventFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       spaces: "drive",
       fields: "files(id)",
     });
@@ -181,7 +210,7 @@ export async function uploadToDrive(
     } else {
       const subFolder = await drive.files.create({
         requestBody: {
-          name: "Payment Screenshots",
+          name: folderName,
           mimeType: "application/vnd.google-apps.folder",
           parents: [eventFolderId],
         },
@@ -250,8 +279,8 @@ export async function getDriveImageUrl(
       fields: "id, shared, webContentLink, webViewLink, thumbnailLink",
     });
 
-    if (file.data.shared && file.data.webContentLink) {
-      return file.data.webContentLink;
+    if (file.data.shared && file.data.webViewLink) {
+      return file.data.webViewLink;
     }
 
     // It's private. The webViewLink requires auth and won't work in an <img> tag.
@@ -265,6 +294,7 @@ export async function getDriveImageUrl(
     return file.data.webViewLink || `https://drive.google.com/file/d/${fileIdOrUrl}/view`;
   } catch (error) {
     console.error("Failed to get Drive image URL:", error);
-    return "";
+    // Fallback: If API fails (e.g. eventual consistency right after upload), return a standard view link
+    return `https://drive.google.com/file/d/${fileIdOrUrl}/view`;
   }
 }

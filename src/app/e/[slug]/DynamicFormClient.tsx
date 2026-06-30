@@ -91,11 +91,64 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
     }
   };
 
+  const renderDescription = (text: string | undefined) => {
+    if (!text) return null;
+    
+    const lines = text.split(/<br\s*\/?>/i);
+    
+    return lines.map((line, lineIndex) => {
+      const parts = [];
+      let lastIndex = 0;
+      const regex = /\[([^\]]+)\]\(([^)]+)\)/g;
+      let match;
+      
+      while ((match = regex.exec(line)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(<span key={`text-${lastIndex}`}>{line.substring(lastIndex, match.index)}</span>);
+        }
+        
+        let url = match[2].trim();
+        if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+          url = url.substring(1, url.length - 1);
+        }
+
+        parts.push(
+          <a key={`link-${match.index}`} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline underline-offset-2 break-all">
+            {match[1]}
+          </a>
+        );
+        lastIndex = regex.lastIndex;
+      }
+      
+      if (lastIndex < line.length) {
+        parts.push(<span key={`text-${lastIndex}`}>{line.substring(lastIndex)}</span>);
+      }
+      
+      return (
+        <span key={`line-${lineIndex}`}>
+          {parts}
+          {lineIndex < lines.length - 1 && <br />}
+        </span>
+      );
+    });
+  };
+
   return (
     <>
+      {/* Hidden inputs to ensure all field values are submitted regardless of page visibility */}
+      {Object.entries(formValues).map(([fieldId, value]) => {
+        // Skip file fields — they're handled by their own input
+        const fieldConfig = formConfig.find((f: any) => f.id === fieldId);
+        if (fieldConfig?.type === 'file' || fieldConfig?.type === 'file_upload') return null;
+        if (value === undefined || value === null) return null;
+        return (
+          <input key={`hidden_${fieldId}`} type="hidden" name={fieldId} value={String(value)} />
+        );
+      })}
+
       {/* Dynamic Fields */}
       {pages.map((pageFields, pageIndex) => (
-        <div key={pageIndex} className={pageIndex === currentPage ? "block" : "hidden"}>
+        <div key={pageIndex} className={pageIndex === currentPage ? "space-y-8 block" : "hidden"}>
           {pageFields.map((field: any) => {
             const isVisible = evaluateLogic(field.logic);
             const isRequiredOnCurrentPage = field.required && pageIndex === currentPage;
@@ -105,8 +158,20 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
         if (field.type === "section_divider") {
           return (
             <div key={field.id} className="pt-6 pb-2 border-b border-gray-100 mt-8">
-              <h3 className="text-xl font-bold text-gray-900">{field.label}</h3>
-              {field.description && <p className="text-gray-500 mt-2 text-sm">{field.description}</p>}
+              <h3 className="text-xl font-bold text-gray-900">{renderDescription(field.label)}</h3>
+              {field.description && <p className="text-gray-500 mt-2 text-sm">{renderDescription(field.description)}</p>}
+            </div>
+          );
+        }
+
+        if (field.type === "hyperlink") {
+          return (
+            <div key={field.id} className="pt-2 pb-2 mt-4 space-y-1">
+              <a href={field.options} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-medium underline underline-offset-4 break-all inline-flex items-center gap-1">
+                {renderDescription(field.label)}
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              </a>
+              {field.description && <p className="text-gray-500 mt-1 text-sm">{renderDescription(field.description)}</p>}
             </div>
           );
         }
@@ -114,10 +179,10 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
         return (
           <div key={field.id} className="space-y-2">
             <Label htmlFor={field.id} className="text-gray-700 font-medium">
-              {field.label} {field.required && <span className="text-red-500">*</span>}
+              {renderDescription(field.label)} {field.required && <span className="text-red-500">*</span>}
             </Label>
             {field.description && (
-              <p className="text-sm text-gray-500 pb-1">{field.description}</p>
+              <p className="text-sm text-gray-500 pb-1">{renderDescription(field.description)}</p>
             )}
             
             {field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "number" ? (
@@ -127,6 +192,16 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
                 type={field.type === "phone" ? "tel" : field.type} 
                 placeholder={field.placeholder} 
                 required={isRequiredOnCurrentPage}
+                {...(field.type === "phone" ? {
+                  maxLength: 10,
+                  pattern: "[0-9]{10}",
+                  title: "Please enter a valid 10-digit phone number",
+                  inputMode: "numeric" as const,
+                  onInput: (e: React.FormEvent<HTMLInputElement>) => {
+                    const target = e.target as HTMLInputElement;
+                    target.value = target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                  }
+                } : {})}
                 onChange={(e) => handleValueChange(field.id, e.target.value)}
                 className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6"
               />
@@ -297,46 +372,46 @@ export default function DynamicFormClient({ event, formConfig, isWaitlistMode }:
         ) : null}
       </div>
 
-      {/* Mandatory Payment Section - Only show on last page */}
-      {isLastPage && (
-        <>
-          <div className="space-y-6">
-            <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
-            <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
-              Please ensure you have sent <strong>₹{event.price}</strong> to the UPI details shown on the right before submitting this form.
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="utr_id" className="text-gray-700 font-medium">UTR / Transaction ID <span className="text-red-500">*</span></Label>
-              <Input 
-                id="utr_id" 
-                name="utr_id" 
-                placeholder="e.g. 123456789012" 
-                required 
-                className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6 font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="payment_screenshot" className="text-gray-700 font-medium">Payment Screenshot <span className="text-red-500">*</span></Label>
-              <Input 
-                id="payment_screenshot" 
-                name="payment_screenshot" 
-                type="file" 
-                accept="image/*"
-                required 
-                className="h-auto py-3 rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-gray-800 cursor-pointer"
-              />
-            </div>
+      {/* Mandatory Payment Section - Only show on last page if paid event and not a survey */}
+      {isLastPage && event.price > 0 && event.form_type !== 'survey' && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-bold text-gray-900">Payment Verification</h3>
+          <div className="bg-yellow-50 p-5 rounded-2xl border border-yellow-100 text-sm text-yellow-800 leading-relaxed">
+            Please ensure you have sent <strong>₹{event.price}</strong> to the UPI details shown on the right before submitting this form.
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="utr_id" className="text-gray-700 font-medium">UTR / Transaction ID <span className="text-red-500">*</span></Label>
+            <Input 
+              id="utr_id" 
+              name="utr_id" 
+              placeholder="e.g. 123456789012" 
+              required 
+              className="rounded-xl bg-gray-50/50 focus-visible:ring-primary/20 py-6 font-mono"
+            />
           </div>
 
-          <SubmitButton 
-            className="w-full py-6 text-base font-semibold rounded-xl bg-gray-900 hover:bg-primary transition-all duration-300 text-white shadow-md hover:shadow-primary/25 mt-8"
-            pendingText={isWaitlistMode ? "Joining..." : "Submitting..."}
-          >
-            {isWaitlistMode ? "Join Waitlist" : "Submit Registration"}
-          </SubmitButton>
-        </>
+          <div className="space-y-2">
+            <Label htmlFor="payment_screenshot" className="text-gray-700 font-medium">Payment Screenshot <span className="text-red-500">*</span></Label>
+            <Input 
+              id="payment_screenshot" 
+              name="payment_screenshot" 
+              type="file" 
+              accept="image/*"
+              required 
+              className="h-auto py-3 rounded-xl bg-gray-50/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-gray-800 cursor-pointer"
+            />
+          </div>
+        </div>
+      )}
+
+      {isLastPage && (
+        <SubmitButton 
+          className="w-full py-6 text-base font-semibold rounded-xl bg-gray-900 hover:bg-primary transition-all duration-300 text-white shadow-md hover:shadow-primary/25 mt-8"
+          pendingText={isWaitlistMode ? "Joining..." : "Submitting..."}
+        >
+          {event.form_type === 'survey' ? "Submit Survey" : (isWaitlistMode ? "Join Waitlist" : "Submit Registration")}
+        </SubmitButton>
       )}
     </>
   );

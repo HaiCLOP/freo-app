@@ -1,5 +1,14 @@
 import { google } from "googleapis";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+
+// Admin client bypasses RLS - needed because public visitors don't have auth sessions
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 /**
  * Google Sheets + Drive utility using the creator's OAuth tokens.
@@ -20,7 +29,7 @@ import { createClient } from "@/lib/supabase/server";
  * Falls back to service account if no OAuth tokens exist.
  */
 async function getGoogleAuth(creatorId: string) {
-  const supabase = await createClient();
+  const supabase = getAdminClient();
   const { data: creator } = await supabase
     .from("creators")
     .select("google_access_token, google_refresh_token")
@@ -29,9 +38,14 @@ async function getGoogleAuth(creatorId: string) {
 
   // If creator has connected Google via OAuth, use their token
   if (creator?.google_access_token) {
+    const redirectUri = process.env.NODE_ENV === "production" 
+      ? "https://freo.haicloplabs.in/api/google/callback"
+      : "http://localhost:3000/api/google/callback";
+
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
     );
 
     oauth2Client.setCredentials({
@@ -42,7 +56,7 @@ async function getGoogleAuth(creatorId: string) {
     // Auto-refresh: save new tokens when refreshed
     oauth2Client.on("tokens", async (tokens) => {
       if (tokens.access_token) {
-        const sb = await createClient();
+        const sb = getAdminClient();
         await sb
           .from("creators")
           .update({
@@ -53,6 +67,22 @@ async function getGoogleAuth(creatorId: string) {
           .eq("id", creatorId);
       }
     });
+
+    // Proactively refresh if token might be expired
+    try {
+      const tokenInfo = await oauth2Client.getAccessToken();
+      if (tokenInfo.token && tokenInfo.token !== creator.google_access_token) {
+        // Token was refreshed, save it
+        const sb = getAdminClient();
+        await sb.from("creators").update({
+          google_access_token: tokenInfo.token,
+          google_token_updated_at: new Date().toISOString(),
+        }).eq("id", creatorId);
+      }
+    } catch (refreshError: any) {
+      console.error("Failed to proactively refresh Google token:", refreshError?.message);
+      // Continue anyway — the API call might still work with the existing token
+    }
 
     return { auth: oauth2Client, isOAuth: true };
   }
@@ -88,6 +118,7 @@ async function getGoogleAuth(creatorId: string) {
 export async function autoCreateSheet(
   creatorId: string,
   eventName: string,
+  formType: 'event' | 'survey' = 'event',
   driveFolderId?: string
 ): Promise<string> {
   const { auth } = await getGoogleAuth(creatorId);
@@ -113,26 +144,19 @@ export async function autoCreateSheet(
 
   const spreadsheetId = spreadsheet.data.spreadsheetId!;
 
-  // 2. Add headers
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: "Registrations!A1:J1",
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [
-        [
-          "Name",
-          "Phone",
-          "Email",
-          "UTR ID",
-          "Status",
-          "Registered At",
-          "Approved At",
-          "Payment Screenshot URL",
-        ],
-      ],
-    },
-  });
+    const baseHeaders = ["Name", "Phone", "Email"];
+    if (formType !== "survey") baseHeaders.push("UTR ID");
+    baseHeaders.push("Status", "Registered At", "Approved At");
+    if (formType !== "survey") baseHeaders.push("Payment Screenshot URL");
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Registrations!A1:Z1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [baseHeaders],
+      },
+    });
 
   // 3. Format headers
   const sheetId = spreadsheet.data.sheets?.[0]?.properties?.sheetId || 0;
@@ -202,7 +226,7 @@ export async function autoCreateSheet(
 export async function appendRowToSheet(
   creatorId: string,
   spreadsheetId: string,
-  values: (string | number | boolean | null)[]
+  values: (string | number | boolean | null)[] | Record<string, any>
 ) {
   if (!spreadsheetId) return;
 
@@ -210,9 +234,32 @@ export async function appendRowToSheet(
     const { auth } = await getGoogleAuth(creatorId);
     const sheets = google.sheets({ version: "v4", auth });
 
+    let finalArray: any[] = [];
+
+    if (!Array.isArray(values)) {
+      // It's a Record. Fetch headers to map it correctly.
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: "Registrations!1:1",
+      });
+      const headers = headerRes.data.values?.[0] || [];
+      
+      finalArray = headers.map(header => {
+        const val = values[header];
+        return val !== undefined && val !== null ? val : "";
+      });
+
+      if (headers.length === 0) {
+        // Fallback if headers are completely missing
+        finalArray = Object.values(values);
+      }
+    } else {
+      finalArray = values; // Legacy array fallback
+    }
+
     // Sanitize values to prevent Spreadsheet Formula Injection (CSV Injection)
     // Any value starting with =, +, -, or @ could be interpreted as a formula.
-    const sanitizedValues = values.map(val => {
+    const sanitizedValues = finalArray.map(val => {
       if (typeof val === 'string') {
         // Allow explicit IMAGE and HYPERLINK formulas for screenshots
         if (val.startsWith('=IMAGE(') || val.startsWith('=HYPERLINK(')) {
@@ -227,7 +274,7 @@ export async function appendRowToSheet(
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "Registrations!A:J",
+      range: "Registrations!A:Z", // Changed to Z to allow for more custom fields
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [sanitizedValues],
@@ -265,14 +312,33 @@ export async function updateRowStatusInSheet(
     const rows = response.data.values;
     if (!rows || rows.length === 0) return;
 
+    const headers = rows[0] || [];
+    const utrIdx = headers.indexOf("UTR ID");
+    const emailIdx = headers.indexOf("Email");
+    const nameIdx = headers.indexOf("Name");
+    const statusIdx = headers.indexOf("Status");
+    const approvedAtIdx = headers.indexOf("Approved At");
+
+    const indexToCol = (index: number) => {
+      let temp, letter = '';
+      while (index >= 0) {
+        temp = index % 26;
+        letter = String.fromCharCode(temp + 65) + letter;
+        index = (index - temp - 26) / 26;
+      }
+      return letter;
+    };
+
     // Find the row matching UTR ID or fallback to Email/Name
     const rowIndex = rows.findIndex((row, idx) => {
       if (idx === 0) return false; // skip header
-      const sheetUtr = row[5]?.toString().trim().toLowerCase();
+      const sheetUtr = utrIdx !== -1 ? row[utrIdx]?.toString().trim().toLowerCase() : undefined;
       const targetUtr = utrId?.toString().trim().toLowerCase();
-      const sheetEmail = row[2]?.toString().trim().toLowerCase();
+      
+      const sheetEmail = emailIdx !== -1 ? row[emailIdx]?.toString().trim().toLowerCase() : undefined;
       const targetEmail = email?.toString().trim().toLowerCase();
-      const sheetName = row[0]?.toString().trim().toLowerCase();
+      
+      const sheetName = nameIdx !== -1 ? row[nameIdx]?.toString().trim().toLowerCase() : undefined;
       const targetName = name?.toString().trim().toLowerCase();
 
       if (targetUtr && sheetUtr === targetUtr) return true;
@@ -289,19 +355,63 @@ export async function updateRowStatusInSheet(
 
     const rowNum = rowIndex + 1;
 
-    // Update Status (Column G) and Approved At (Column I)
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        valueInputOption: "USER_ENTERED",
-        data: [
-          { range: `Registrations!G${rowNum}`, values: [[status]] },
-          { range: `Registrations!I${rowNum}`, values: [[approvedAt || ""]] },
-        ],
-      },
-    });
+    // Dynamically update Status and Approved At using column indices
+    const updateData = [];
+    if (statusIdx !== -1) {
+      updateData.push({ range: `Registrations!${indexToCol(statusIdx)}${rowNum}`, values: [[status]] });
+    }
+    if (approvedAtIdx !== -1) {
+      updateData.push({ range: `Registrations!${indexToCol(approvedAtIdx)}${rowNum}`, values: [[approvedAt || ""]] });
+    }
+
+    if (updateData.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: "USER_ENTERED",
+          data: updateData,
+        },
+      });
+    }
   } catch (error) {
     console.error("Failed to update Google Sheet row:", error);
     throw error;
+  }
+}
+
+/**
+ * Synchronize the Google Sheet headers with the latest dynamic form configuration.
+ * Retains the 8 standard columns and dynamically appends custom field labels.
+ */
+export async function syncSheetHeaders(creatorId: string, spreadsheetId: string, formConfig: any[], formType: 'event' | 'survey' = 'event') {
+  if (!spreadsheetId) return;
+
+  try {
+    const { auth } = await getGoogleAuth(creatorId);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const headers = ["Name", "Phone", "Email"];
+    if (formType !== "survey") headers.push("UTR ID");
+    headers.push("Status", "Registered At", "Approved At");
+    if (formType !== "survey") headers.push("Payment Screenshot URL");
+
+    if (formConfig && Array.isArray(formConfig)) {
+      for (const field of formConfig) {
+        if (["name", "phone", "email"].includes(field.id)) continue;
+        if (["section_divider", "page_break", "hyperlink"].includes(field.type)) continue;
+        headers.push(field.label || field.id);
+      }
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Registrations!A1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [headers],
+      },
+    });
+  } catch (error) {
+    console.error("Failed to sync sheet headers:", error);
   }
 }
