@@ -44,7 +44,7 @@ export function CommitteeManager({ conferenceId, committees }: { conferenceId: s
   const [editingPortfolio, setEditingPortfolio] = useState<string | null>(null);
   const [editPortfolioForm, setEditPortfolioForm] = useState({ name: "", capacity: 1 });
   const [csvText, setCsvText] = useState("");
-  const [parsedMatrix, setParsedMatrix] = useState<{ name: string; capacity: number }[]>([]);
+  const [parsedMatrix, setParsedMatrix] = useState<{ name: string; capacity: number; isDuplicate?: boolean }[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [selectedPortfolios, setSelectedPortfolios] = useState<Set<string>>(new Set());
@@ -58,13 +58,28 @@ export function CommitteeManager({ conferenceId, committees }: { conferenceId: s
   }, [router]);
 
   const handleParseCsv = () => {
+    if (!showMatrixModal) return;
+    const c = committees.find(x => x.id === showMatrixModal);
+    const existingNames = new Set((c?.portfolios || []).map(p => p.name.toLowerCase()));
+    
     const lines = csvText.split("\n").filter(l => l.trim());
-    setParsedMatrix(lines.map(line => {
+    const parsed: { name: string; capacity: number; isDuplicate?: boolean }[] = [];
+    const seenInCsv = new Set<string>();
+
+    for (const line of lines) {
       const parts = line.split(",");
       const name = parts[0]?.trim() || "Unknown";
       const cap = parts[1] ? parseInt(parts[1].trim()) : 1;
-      return { name, capacity: isNaN(cap) ? 1 : cap };
-    }));
+      
+      const lowerName = name.toLowerCase();
+      const isDuplicate = existingNames.has(lowerName) || seenInCsv.has(lowerName);
+      if (!isDuplicate) {
+        seenInCsv.add(lowerName);
+      }
+      
+      parsed.push({ name, capacity: isNaN(cap) ? 1 : cap, isDuplicate });
+    }
+    setParsedMatrix(parsed);
   };
 
   const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -100,7 +115,17 @@ export function CommitteeManager({ conferenceId, committees }: { conferenceId: s
 
   const handleSavePortfolioEdit = (id: string) => doAction(async () => { const { updatePortfolio } = await import("@/lib/mun/actions/conference"); await updatePortfolio(id, editPortfolioForm); setEditingPortfolio(null); });
 
-  const uploadMatrix = (cId: string) => { if (!parsedMatrix.length) return; doAction(async () => { const { uploadPortfolioMatrix } = await import("@/lib/mun/actions/conference"); await uploadPortfolioMatrix(cId, parsedMatrix); setShowMatrixModal(null); setCsvText(""); setParsedMatrix([]); }); };
+  const uploadMatrix = (cId: string) => { 
+    const validEntries = parsedMatrix.filter(p => !p.isDuplicate);
+    if (!validEntries.length) return; 
+    doAction(async () => { 
+      const { uploadPortfolioMatrix } = await import("@/lib/mun/actions/conference"); 
+      await uploadPortfolioMatrix(cId, validEntries); 
+      setShowMatrixModal(null); 
+      setCsvText(""); 
+      setParsedMatrix([]); 
+    }); 
+  };
 
   const togglePortfolioSelection = (id: string) => { const next = new Set(selectedPortfolios); next.has(id) ? next.delete(id) : next.add(id); setSelectedPortfolios(next); };
   const toggleSelectAll = (portfolios: PortfolioItem[]) => {
@@ -268,8 +293,26 @@ export function CommitteeManager({ conferenceId, committees }: { conferenceId: s
             </div>
             {parsedMatrix.length > 0 && (
               <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-xl">
-                <table className="w-full text-sm text-left"><thead className="bg-gray-50 text-xs uppercase text-gray-500 sticky top-0"><tr><th className="px-4 py-2">Portfolio</th><th className="px-4 py-2">Cap</th></tr></thead>
-                <tbody className="divide-y divide-gray-200">{parsedMatrix.map((p,i) => <tr key={i}><td className="px-4 py-2 font-medium">{p.name}</td><td className="px-4 py-2 text-gray-500">{p.capacity}</td></tr>)}</tbody></table>
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-xs uppercase text-gray-500 sticky top-0">
+                    <tr><th className="px-4 py-2">Portfolio</th><th className="px-4 py-2">Cap</th><th className="px-4 py-2">Status</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {parsedMatrix.map((p,i) => (
+                      <tr key={i} className={p.isDuplicate ? "bg-red-50/50" : ""}>
+                        <td className="px-4 py-2 font-medium">{p.name}</td>
+                        <td className="px-4 py-2 text-gray-500">{p.capacity}</td>
+                        <td className="px-4 py-2">
+                          {p.isDuplicate ? (
+                            <span className="inline-flex items-center gap-1 text-red-600 font-medium text-xs"><AlertTriangle size={12} /> Duplicate</span>
+                          ) : (
+                            <span className="text-green-600 font-medium text-xs">Valid</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
