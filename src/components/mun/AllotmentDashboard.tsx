@@ -22,6 +22,7 @@ export function AllotmentDashboard({ conferenceId, committees }: AllotmentDashbo
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedCommittee, setSelectedCommittee] = useState<string>(committees[0]?.id || "");
+  const [previewData, setPreviewData] = useState<Array<{ registration_id: string, portfolio_id: string, delegate_name: string, portfolio_name: string }> | null>(null);
 
   const handleRunAllotment = () => {
     if (!selectedCommittee) return;
@@ -34,12 +35,37 @@ export function AllotmentDashboard({ conferenceId, committees }: AllotmentDashbo
         const res = await runAIAllotment(conferenceId, selectedCommittee);
         if (res.success) {
           setSuccess(res.message);
-          window.location.reload();
+          if (res.preview) setPreviewData(res.preview);
         } else {
           setError(res.message);
         }
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to run AI Allotment");
+      }
+    });
+  };
+
+  const handleConfirmAllotment = () => {
+    if (!previewData || !selectedCommittee) return;
+    setError(null);
+    setSuccess(null);
+    
+    startTransition(async () => {
+      try {
+        const { confirmAllotment } = await import("@/lib/mun/actions/allotment");
+        const res = await confirmAllotment(conferenceId, selectedCommittee, previewData.map(p => ({
+          registration_id: p.registration_id,
+          portfolio_id: p.portfolio_id
+        })));
+        if (res.success) {
+          setSuccess(res.message);
+          setPreviewData(null);
+          window.location.reload();
+        } else {
+          setError(res.message);
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to confirm allotments");
       }
     });
   };
@@ -183,10 +209,45 @@ export function AllotmentDashboard({ conferenceId, committees }: AllotmentDashbo
               </div>
               
               <div className="neo-card bg-white p-6">
-                <h3 className="font-bold text-[#1B1C20] mb-4">Allotment Results preview will appear here</h3>
-                <p className="text-sm text-[#6B7280]">
-                  Navigate to the <strong>Delegates</strong> tab to see specific portfolio assignments and make manual overrides.
-                </p>
+                {previewData ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-[#1B1C20]">Proposed AI Allotment</h3>
+                      <button
+                        onClick={handleConfirmAllotment}
+                        disabled={isPending}
+                        className="neo-btn bg-[#22C55E] text-white px-4 py-2 font-bold text-sm disabled:opacity-50"
+                      >
+                        {isPending ? "Saving..." : "Confirm & Publish Allotments"}
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-[#e5e7eb]">
+                            <th className="p-3 text-sm font-bold text-[#1B1C20]">Delegate</th>
+                            <th className="p-3 text-sm font-bold text-[#1B1C20]">Assigned Portfolio</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewData.map(p => (
+                            <tr key={p.registration_id} className="border-b border-[#f3f4f6]">
+                              <td className="p-3 text-sm text-[#1B1C20]">{p.delegate_name}</td>
+                              <td className="p-3 text-sm text-[#A855F7] font-bold">{p.portfolio_name}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="font-bold text-[#1B1C20] mb-4">Allotment Results preview will appear here</h3>
+                    <p className="text-sm text-[#6B7280]">
+                      Click "Run AI Allotment Engine" to generate a preview. Navigate to the <strong>Delegates</strong> tab later to make manual overrides.
+                    </p>
+                  </>
+                )}
               </div>
             </>
           ) : (

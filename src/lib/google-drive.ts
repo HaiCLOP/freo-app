@@ -91,14 +91,14 @@ async function getDriveClient(creatorId: string) {
 }
 
 /**
- * Ensure the root "Freo Events" folder exists in the creator's Drive.
+ * Ensure the root folder exists in the creator's Drive.
  * Creates it if missing and saves the ID.
  */
-async function ensureRootFolder(creatorId: string): Promise<string> {
+async function ensureRootFolder(creatorId: string, rootFolderName: string = "Freo Events"): Promise<string> {
   const { drive, folderId } = await getDriveClient(creatorId);
 
-  // Already have a folder ID saved
-  if (folderId) {
+  // If using default folder and already have a folder ID saved, use it
+  if (rootFolderName === "Freo Events" && folderId) {
     try {
       // Verify it still exists
       await drive.files.get({ fileId: folderId, fields: "id" });
@@ -108,28 +108,30 @@ async function ensureRootFolder(creatorId: string): Promise<string> {
     }
   }
 
-  // Search for existing "Freo Events" folder
+  // Search for existing root folder
   const searchRes = await drive.files.list({
-    q: `name='Freo Events' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    q: `name='${rootFolderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     spaces: "drive",
     fields: "files(id, name)",
   });
 
   if (searchRes.data.files && searchRes.data.files.length > 0) {
     const existingId = searchRes.data.files[0].id!;
-    // Save for future use
-    const supabase = getAdminClient();
-    await supabase
-      .from("creators")
-      .update({ google_drive_folder_id: existingId })
-      .eq("id", creatorId);
+    // Save for future use only if it's the default Freo folder
+    if (rootFolderName === "Freo Events") {
+      const supabase = getAdminClient();
+      await supabase
+        .from("creators")
+        .update({ google_drive_folder_id: existingId })
+        .eq("id", creatorId);
+    }
     return existingId;
   }
 
   // Create the folder
   const folderRes = await drive.files.create({
     requestBody: {
-      name: "Freo Events",
+      name: rootFolderName,
       mimeType: "application/vnd.google-apps.folder",
     },
     fields: "id",
@@ -137,24 +139,27 @@ async function ensureRootFolder(creatorId: string): Promise<string> {
 
   const newFolderId = folderRes.data.id!;
 
-  // Save to DB
-  const supabase = getAdminClient();
-  await supabase
-    .from("creators")
-    .update({ google_drive_folder_id: newFolderId })
-    .eq("id", creatorId);
+  // Save to DB only if it's the default Freo folder
+  if (rootFolderName === "Freo Events") {
+    const supabase = getAdminClient();
+    await supabase
+      .from("creators")
+      .update({ google_drive_folder_id: newFolderId })
+      .eq("id", creatorId);
+  }
 
   return newFolderId;
 }
 
 /**
- * Ensure an event subfolder exists under "Freo Events".
+ * Ensure an event subfolder exists under the root folder.
  */
 async function ensureEventFolder(
   creatorId: string,
-  eventSlug: string
+  eventSlug: string,
+  rootFolderName: string = "Freo Events"
 ): Promise<string> {
-  const rootFolderId = await ensureRootFolder(creatorId);
+  const rootFolderId = await ensureRootFolder(creatorId, rootFolderName);
   const { drive } = await getDriveClient(creatorId);
 
   // Check if subfolder exists
@@ -190,9 +195,10 @@ export async function uploadToDrive(
   category: string,
   fileName: string,
   file: File,
-  isPublic: boolean = false
+  isPublic: boolean = false,
+  rootFolderName: string = "Freo Events"
 ): Promise<{ url: string; fileId: string }> {
-  const eventFolderId = await ensureEventFolder(creatorId, eventSlug);
+  const eventFolderId = await ensureEventFolder(creatorId, eventSlug, rootFolderName);
   const { drive } = await getDriveClient(creatorId);
 
   // For payment screenshots and custom files, create sub-subfolders

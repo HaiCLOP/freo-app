@@ -1,9 +1,12 @@
 import { getMyConferences } from "@/lib/mun/actions/conference";
 import Link from "next/link";
 import { Plus, Users, CalendarDays, MapPin, Globe, Archive } from "lucide-react";
+import { headers } from "next/headers";
 
 export default async function MunDashboardPage() {
   const conferences = await getMyConferences();
+  const headersList = await headers();
+  const origin = headersList.get("origin") || "http://localhost:3000";
 
   const active = conferences.filter((c) => !c.is_archived);
   const archived = conferences.filter((c) => c.is_archived);
@@ -111,7 +114,7 @@ export default async function MunDashboardPage() {
               {conf.is_published && (
                 <div className="mt-4 pt-4 border-t border-[#e5e7eb] flex items-center gap-2 text-xs text-[#6B7280]">
                   <Globe size={12} />
-                  <span className="truncate">freo.haicloplabs.in/c/{conf.slug}</span>
+                  <span className="truncate">{origin}/c/{conf.slug}</span>
                 </div>
               )}
             </Link>

@@ -11,6 +11,10 @@ interface RegisterPageProps {
     name: string;
     org_name: string;
     delegate_fee: number;
+    banner_url?: string | null;
+    upi_id?: string | null;
+    upi_qr_url?: string | null;
+    razorpay_link?: string | null;
     committees: Array<{
       id: string;
       name: string;
@@ -40,8 +44,7 @@ export function RegistrationForm({ conference }: RegisterPageProps) {
 
     // Handle screenshot upload
     if (screenshotFile && conference.delegate_fee > 0) {
-      // TODO: Upload to Supabase Storage and set URL
-      fd.set("payment_screenshot_url", "pending_upload");
+      fd.set("payment_screenshot", screenshotFile);
     }
 
     startTransition(async () => {
@@ -50,7 +53,26 @@ export function RegistrationForm({ conference }: RegisterPageProps) {
         await submitRegistration(conference.id, fd);
         setSuccess(true);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Registration failed");
+        if (err instanceof Error) {
+          // Parse Zod validation errors for friendly display
+          try {
+            const parsed = JSON.parse(err.message);
+            if (Array.isArray(parsed)) {
+              const messages = parsed.map((e: { path?: string[]; message?: string }) => {
+                const field = e.path?.join(".") || "field";
+                const label = field.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                return `${label}: ${e.message}`;
+              });
+              setError(messages.join("\n"));
+              return;
+            }
+          } catch {
+            // Not JSON, use raw message
+          }
+          setError(err.message);
+        } else {
+          setError("Registration failed. Please try again.");
+        }
       }
     });
   };
@@ -80,14 +102,26 @@ export function RegistrationForm({ conference }: RegisterPageProps) {
   return (
     <div className="min-h-screen bg-[#f5f1e4] py-12 px-6">
       <div className="max-w-2xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-[#2c2e2a]">Register for {conference.name}</h1>
-          <p className="text-[#6B7280] mt-1">{conference.org_name}</p>
+        {conference.banner_url && (
+          <div className="mb-8 rounded-xl overflow-hidden neo-badge bg-white p-2">
+            <img 
+              src={conference.banner_url} 
+              alt={`${conference.name} Banner`} 
+              className="w-full h-auto max-h-64 object-cover rounded-lg border-2 border-[#1B1C20]"
+            />
+          </div>
+        )}
+
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-black uppercase tracking-tight text-[#1B1C20] mb-2">{conference.name}</h1>
+          <p className="text-[#6B7280] font-bold text-lg">{conference.org_name}</p>
         </div>
 
         {error && (
           <div className="neo-badge bg-red-50 text-red-700 px-4 py-3 text-sm font-medium mb-6">
-            {error}
+            {error.split("\n").map((line, i) => (
+              <p key={i} className={i > 0 ? "mt-1" : ""}>{line}</p>
+            ))}
           </div>
         )}
 
@@ -196,28 +230,77 @@ export function RegistrationForm({ conference }: RegisterPageProps) {
 
           {/* Payment */}
           {conference.delegate_fee > 0 && (
-            <div className="space-y-4">
-              <h3 className="font-bold text-[#1B1C20]">
+            <div className="space-y-6 pt-6 border-t-2 border-dashed border-[#1B1C20]">
+              <h3 className="font-black text-xl uppercase text-[#1B1C20]">
                 Payment — ₹{conference.delegate_fee}
               </h3>
-              <div>
-                <label className="block text-sm font-bold text-[#1B1C20] mb-2">UTR / Transaction ID</label>
-                <input name="payment_utr" className="neo-badge w-full px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#DDFE55]" placeholder="e.g. 123456789012" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-[#1B1C20] mb-2">Payment Screenshot</label>
-                <label className="neo-badge bg-[#f3f4f6] p-6 flex flex-col items-center gap-2 cursor-pointer hover:bg-[#e5e7eb] transition-colors">
-                  <Upload size={20} className="text-[#6B7280]" />
-                  <span className="text-sm text-[#6B7280]">
-                    {screenshotFile ? screenshotFile.name : "Click to upload screenshot"}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => setScreenshotFile(e.target.files?.[0] ?? null)}
-                  />
-                </label>
+
+              {conference.razorpay_link && (
+                <a 
+                  href={conference.razorpay_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="neo-btn bg-[#1B1C20] text-white px-6 py-4 font-bold text-sm w-full block text-center mb-6 hover:bg-gray-800 transition-colors"
+                >
+                  Pay via Razorpay
+                </a>
+              )}
+
+              {(conference.upi_qr_url || conference.upi_id) && (
+                <div className="bg-[#DDFE55]/20 p-6 neo-badge border-2 border-[#1B1C20]">
+                  <h4 className="font-bold text-[#1B1C20] mb-4 text-center">Scan to Pay</h4>
+                  
+                  {conference.upi_qr_url && (
+                    <div className="flex justify-center mb-6">
+                      <div className="neo-badge bg-white p-4">
+                        <img src={conference.upi_qr_url} alt="UPI QR Code" className="w-48 h-48 object-contain" />
+                      </div>
+                    </div>
+                  )}
+
+                  {conference.upi_id && (
+                    <div className="text-center mb-4">
+                      <p className="text-sm text-[#6B7280] font-bold mb-1">UPI ID</p>
+                      <div className="flex items-center justify-center gap-2">
+                        <code className="bg-white neo-badge px-4 py-2 font-mono font-bold text-[#1B1C20]">{conference.upi_id}</code>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(conference.upi_id!);
+                            alert("UPI ID copied!");
+                          }}
+                          className="neo-badge bg-[#1B1C20] text-white px-3 py-2 text-xs font-bold hover:bg-gray-800"
+                        >
+                          COPY
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-[#1B1C20] mb-2">UTR / Transaction ID *</label>
+                  <input name="payment_utr" required className="neo-badge w-full px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#DDFE55]" placeholder="e.g. 123456789012" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-[#1B1C20] mb-2">Payment Screenshot *</label>
+                  <label className="neo-badge bg-white border-2 border-dashed border-[#1B1C20] p-6 flex flex-col items-center gap-2 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <Upload size={20} className="text-[#1B1C20]" />
+                    <span className="text-sm font-bold text-[#1B1C20]">
+                      {screenshotFile ? screenshotFile.name : "Click to upload screenshot"}
+                    </span>
+                    <input
+                      type="file"
+                      name="payment_screenshot"
+                      required
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => setScreenshotFile(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           )}
@@ -225,7 +308,7 @@ export function RegistrationForm({ conference }: RegisterPageProps) {
           <button
             type="submit"
             disabled={isPending}
-            className="neo-btn bg-[#DDFE55] text-[#1B1C20] px-10 py-4 font-bold text-sm w-full disabled:opacity-50"
+            className="neo-btn bg-[#1B1C20] text-[#DDFE55] px-10 py-5 font-black text-lg w-full disabled:opacity-50 mt-8 uppercase hover:bg-gray-900 transition-colors"
           >
             {isPending ? "Submitting..." : "Submit Registration"}
           </button>

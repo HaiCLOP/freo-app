@@ -17,13 +17,13 @@ const ratelimit = redis
     })
   : null;
 
-// AI Form Builder: 3 requests per day
+// AI Form Builder: 100 requests per day (increased for testing)
 const aiFormLimiter = redis
   ? new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(3, "1 d"),
+      limiter: Ratelimit.slidingWindow(100, "1 d"),
       analytics: true,
-      prefix: "@upstash/ratelimit:ai_form",
+      prefix: "@upstash/ratelimit:ai_form_test",
     })
   : null;
 

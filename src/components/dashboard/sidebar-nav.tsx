@@ -54,7 +54,7 @@ export function SidebarNav() {
         Settings
       </Link>
       <Link
-        href="#"
+        href="/contact"
         className="flex items-center gap-3 px-4 py-3.5 rounded-[16px] text-[#8E8F94] hover:bg-[#2A2B31]/50 hover:text-white font-medium transition-all shrink-0"
       >
         <HelpCircle className="w-5 h-5" />

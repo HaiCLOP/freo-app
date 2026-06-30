@@ -127,7 +127,7 @@ export async function updateConference(id: string, formData: FormData) {
 
   const fields = [
     "name", "org_name", "city", "venue", "description",
-    "refund_policy", "razorpay_link",
+    "refund_policy", "razorpay_link", "upi_id"
   ];
   for (const f of fields) {
     if (raw[f] !== undefined) updates[f] = raw[f] || null;
@@ -146,6 +146,33 @@ export async function updateConference(id: string, formData: FormData) {
   if (raw.is_published !== undefined) updates.is_published = raw.is_published === "true";
   if (raw.social_links) {
     try { updates.social_links = JSON.parse(raw.social_links as string); } catch {}
+  }
+
+  // Handle File Uploads (Banner & UPI QR)
+  const bannerFile = formData.get("banner_file") as File;
+  const upiQrFile = formData.get("upi_qr_file") as File;
+
+  const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const mimeToExt: Record<string, string> = {
+    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif'
+  };
+
+  const { uploadFile } = await import("@/lib/storage");
+
+  // We need the slug for naming the folder
+  const { data: currentConf } = await supabase.from("mun_conferences").select("slug").eq("id", id).single();
+  const slug = currentConf?.slug || id;
+
+  if (bannerFile && bannerFile.size > 0) {
+    if (!allowedImageTypes.includes(bannerFile.type)) throw new Error("Invalid banner file type. Only images are allowed.");
+    const ext = mimeToExt[bannerFile.type] || 'bin';
+    updates.banner_url = await uploadFile(user.id, slug, "banner", `banner.${ext}`, bannerFile, true);
+  }
+
+  if (upiQrFile && upiQrFile.size > 0) {
+    if (!allowedImageTypes.includes(upiQrFile.type)) throw new Error("Invalid UPI QR file type. Only images are allowed.");
+    const ext = mimeToExt[upiQrFile.type] || 'bin';
+    updates.upi_qr_url = await uploadFile(user.id, slug, "upi-qr", `upi-qr.${ext}`, upiQrFile, true);
   }
 
   const { error } = await supabase
@@ -173,6 +200,43 @@ export async function publishConference(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath(`/mun/dashboard/conference/${id}`);
   revalidatePath("/mun/dashboard");
+}
+
+export async function uploadMunBanner(conferenceId: string, formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const file = formData.get("banner") as File | null;
+  if (!file) throw new Error("No file provided");
+
+  const { data: conf } = await supabase.from("mun_conferences").select("slug, creator_id").eq("id", conferenceId).single();
+  if (!conf || conf.creator_id !== user.id) throw new Error("Unauthorized or Conference not found");
+
+  const { uploadToDrive } = await import("@/lib/google-drive");
+  const ext = file.name.split(".").pop();
+  const fileName = `banner-${Date.now()}.${ext}`;
+
+  // Upload to "MUN Banners" root folder, making it public
+  const { url } = await uploadToDrive(
+    user.id,
+    conf.slug,
+    "banners",
+    fileName,
+    file,
+    true,
+    "MUN Banners"
+  );
+
+  const { error } = await supabase
+    .from("mun_conferences")
+    .update({ banner_url: url, updated_at: new Date().toISOString() })
+    .eq("id", conferenceId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/mun/dashboard/conference/${conferenceId}`);
+  return url;
 }
 
 // ─── Committee CRUD ───────────────────────────────────────────────────────
@@ -242,9 +306,9 @@ export async function addCommittee(conferenceId: string, formData: FormData) {
   return committee as Committee;
 }
 
-export async function addPortfoliosBulk(
+export async function uploadPortfolioMatrix(
   committeeId: string,
-  portfolios: Array<{ name: string; display_name?: string; description?: string }>
+  portfolios: Array<{ name: string; capacity: number }>
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -267,8 +331,7 @@ export async function addPortfoliosBulk(
   const items = portfolios.map((p, i) => ({
     committee_id: committeeId,
     name: p.name,
-    display_name: p.display_name || null,
-    description: p.description || null,
+    capacity: p.capacity,
     display_order: (existing.count ?? 0) + i,
   }));
 
@@ -276,6 +339,137 @@ export async function addPortfoliosBulk(
   if (error) throw new Error(error.message);
 
   revalidatePath(`/mun/dashboard/conference/${committee.conference_id}`);
+}
+
+export async function getCommitteePortfolios(committeeId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("mun_portfolios")
+    .select("*")
+    .eq("committee_id", committeeId)
+    .order("display_order");
+  return data || [];
+}
+
+// ─── Committee Edit / Delete ──────────────────────────────────────────────
+
+export async function updateCommittee(committeeId: string, updates: Record<string, unknown>) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // Verify ownership via committee → conference
+  const { data: committee } = await supabase
+    .from("mun_committees")
+    .select("conference_id, mun_conferences!inner(creator_id)")
+    .eq("id", committeeId)
+    .single();
+
+  if (!committee) throw new Error("Committee not found");
+
+  const { error } = await supabase
+    .from("mun_committees")
+    .update(updates)
+    .eq("id", committeeId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath(`/mun/dashboard/conference/${committee.conference_id}`);
+}
+
+export async function deleteCommittee(committeeId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: committee } = await supabase
+    .from("mun_committees")
+    .select("conference_id, mun_conferences!inner(creator_id)")
+    .eq("id", committeeId)
+    .single();
+
+  if (!committee) throw new Error("Committee not found");
+
+  // Delete portfolios first (cascade)
+  await supabase.from("mun_portfolios").delete().eq("committee_id", committeeId);
+  // Delete EB roles
+  await supabase.from("mun_eb_roles").delete().eq("committee_id", committeeId);
+  // Delete checklists
+  await supabase.from("mun_eb_checklists").delete().eq("committee_id", committeeId);
+  // Delete the committee
+  const { error } = await supabase.from("mun_committees").delete().eq("id", committeeId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/mun/dashboard/conference/${committee.conference_id}`);
+}
+
+// ─── Portfolio CRUD ───────────────────────────────────────────────────────
+
+export async function addPortfolio(committeeId: string, name: string, capacity: number = 1) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: committee } = await supabase
+    .from("mun_committees")
+    .select("conference_id, mun_conferences!inner(creator_id)")
+    .eq("id", committeeId)
+    .single();
+  if (!committee) throw new Error("Committee not found");
+
+  const { count } = await supabase
+    .from("mun_portfolios")
+    .select("*", { count: "exact", head: true })
+    .eq("committee_id", committeeId);
+
+  const { data, error } = await supabase
+    .from("mun_portfolios")
+    .insert({ committee_id: committeeId, name, capacity, display_order: count ?? 0 })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath(`/mun/dashboard/conference/${committee.conference_id}`);
+  return data;
+}
+
+export async function updatePortfolio(portfolioId: string, updates: { name?: string; capacity?: number }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("mun_portfolios")
+    .update(updates)
+    .eq("id", portfolioId);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function deletePortfolio(portfolioId: string, conferenceId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // Clear allotments referencing this portfolio
+  await supabase
+    .from("mun_registrations")
+    .update({ portfolio_allotted: null })
+    .eq("portfolio_allotted", portfolioId);
+
+  const { error } = await supabase.from("mun_portfolios").delete().eq("id", portfolioId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/mun/dashboard/conference/${conferenceId}`);
+}
+
+export async function bulkDeletePortfolios(portfolioIds: string[], conferenceId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  await supabase.from("mun_registrations").update({ portfolio_allotted: null }).in("portfolio_allotted", portfolioIds);
+  const { error } = await supabase.from("mun_portfolios").delete().in("id", portfolioIds);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/mun/dashboard/conference/${conferenceId}`);
 }
 
 // ─── EB Invitations ───────────────────────────────────────────────────────
@@ -306,8 +500,9 @@ export async function inviteEBMember(conferenceId: string, formData: FormData) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
-  // Find or require an EB role
+  // Find or create an EB role
   let roleId: string;
+  
   if (parsed.committee_id) {
     const { data: role } = await supabase
       .from("mun_eb_roles")
@@ -315,16 +510,67 @@ export async function inviteEBMember(conferenceId: string, formData: FormData) {
       .eq("committee_id", parsed.committee_id)
       .eq("role_type", parsed.role_type)
       .single();
-    if (!role) throw new Error(`No ${parsed.role_type} role configured for this committee`);
-    roleId = role.id;
+      
+    if (role) {
+      roleId = role.id;
+    } else {
+      // Auto-create role if it doesn't exist for this committee
+      const { data: newRole, error: roleError } = await supabase
+        .from("mun_eb_roles")
+        .insert({
+          committee_id: parsed.committee_id,
+          role_type: parsed.role_type,
+          title: parsed.role_type.replace(/_/g, " "),
+        })
+        .select()
+        .single();
+      if (roleError) throw new Error(roleError.message);
+      roleId = newRole.id;
+    }
   } else {
     // Conference-level roles (SEC_GEN, USG)
-    const { data: roles } = await supabase
+    if (parsed.role_type !== "SEC_GEN" && parsed.role_type !== "USG") {
+      throw new Error(`The role ${parsed.role_type.replace(/_/g, " ")} must be assigned to a specific committee.`);
+    }
+    
+    // We need a conference_id for conference-level roles, but the schema requires committee_id.
+    // As a workaround, we will look for an existing Sec-Gen role, or throw an error indicating
+    // that this feature requires the Phase 5 schema update.
+    const { data: committees } = await supabase
+      .from("mun_committees")
+      .select("id")
+      .eq("conference_id", conferenceId)
+      .limit(1);
+      
+    if (!committees || committees.length === 0) {
+      throw new Error("You must create at least one committee before inviting EB members.");
+    }
+    
+    // Use the first committee as a dummy anchor for the conference-level role for now
+    const dummyCommitteeId = committees[0].id;
+    
+    const { data: role } = await supabase
       .from("mun_eb_roles")
-      .select("id, committee_id")
-      .eq("role_type", parsed.role_type);
-    if (!roles?.length) throw new Error(`No ${parsed.role_type} role found`);
-    roleId = roles[0].id;
+      .select("id")
+      .eq("committee_id", dummyCommitteeId)
+      .eq("role_type", parsed.role_type)
+      .single();
+      
+    if (role) {
+      roleId = role.id;
+    } else {
+      const { data: newRole, error: roleError } = await supabase
+        .from("mun_eb_roles")
+        .insert({
+          committee_id: dummyCommitteeId,
+          role_type: parsed.role_type,
+          title: parsed.role_type.replace(/_/g, " "),
+        })
+        .select()
+        .single();
+      if (roleError) throw new Error(roleError.message);
+      roleId = newRole.id;
+    }
   }
 
   // Check if user exists

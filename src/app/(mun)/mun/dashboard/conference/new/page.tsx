@@ -45,6 +45,25 @@ export default function NewConferencePage() {
     const raw = Object.fromEntries(fd.entries()) as Record<string, string>;
     setFormState((prev) => ({ ...prev, ...raw }));
 
+    // Date Sanitization Check
+    const regOpen = new Date(raw.registration_open);
+    const regClose = new Date(raw.registration_close);
+    const startDate = new Date(raw.date_start);
+    const endDate = new Date(raw.date_end);
+
+    if (regOpen >= regClose) {
+      setError("Registration Opens must be before Registration Closes.");
+      return;
+    }
+    if (regClose >= startDate) {
+      setError("Registration Closes must be before the Conference Start Date.");
+      return;
+    }
+    if (startDate >= endDate) {
+      setError("Conference Start Date must be before the End Date.");
+      return;
+    }
+
     if (!conferenceId) {
       // Create conference on first step
       startTransition(async () => {
@@ -77,8 +96,14 @@ export default function NewConferencePage() {
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       try {
-        const { updateConference } = await import("@/lib/mun/actions/conference");
+        const { updateConference, uploadMunBanner } = await import("@/lib/mun/actions/conference");
         await updateConference(conferenceId, fd);
+        
+        const bannerFile = fd.get("banner") as File;
+        if (bannerFile && bannerFile.size > 0) {
+          await uploadMunBanner(conferenceId, fd);
+        }
+        
         next();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to update settings");
@@ -273,6 +298,18 @@ export default function NewConferencePage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-bold text-[#1B1C20] mb-2">Conference Banner (Google Drive)</label>
+              <div className="neo-badge w-full px-4 py-3 bg-[#f3f4f6] flex items-center justify-between">
+                <input
+                  name="banner"
+                  type="file"
+                  accept="image/*"
+                  className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#1B1C20] file:text-[#DDFE55] hover:file:bg-[#333] cursor-pointer"
+                />
+              </div>
+              <p className="text-xs text-[#9ca3af] mt-1">Requires Google Account integration in Global Settings. Will be stored in "MUN Banners".</p>
+            </div>
+            <div>
               <label className="block text-sm font-bold text-[#1B1C20] mb-2">Razorpay Payment Link (optional)</label>
               <input
                 name="razorpay_link"
@@ -322,17 +359,22 @@ export default function NewConferencePage() {
         <div className="neo-card bg-white p-8 space-y-6">
           <h2 className="text-2xl font-bold text-[#1B1C20]">Registration Form</h2>
           <p className="text-[#6B7280]">
-            Default fields (Name, Email, School, Phone, Experience) are always included.
-            Custom fields can be added from the conference dashboard.
+            A powerful drag-and-drop form builder allows you to fully customize delegate data collection.
           </p>
           <div className="bg-[#f3f4f6] neo-badge p-6 space-y-3">
-            {["Full Name", "Email", "Phone", "School/Institution", "Grade/Year", "Experience Level", "Committee Preferences (1-3)"].map((f) => (
+            <p className="text-sm font-bold text-[#1B1C20]">Basic Fields Included:</p>
+            {["Full Name", "Email", "Phone"].map((f) => (
               <div key={f} className="flex items-center gap-3 text-sm">
                 <Check size={14} className="text-[#22C55E]" />
                 <span className="text-[#1B1C20] font-medium">{f}</span>
-                <span className="text-[#9ca3af] text-xs ml-auto">Default</span>
+                <span className="text-[#9ca3af] text-xs ml-auto">Locked</span>
               </div>
             ))}
+            <div className="mt-4 pt-4 border-t border-gray-300">
+              <p className="text-xs text-[#6B7280]">
+                You can add Custom Dropdowns, File Uploads, Grid Choices, and more in the <span className="font-bold">Form Builder Tab</span> inside the Conference Dashboard.
+              </p>
+            </div>
           </div>
           <div className="flex justify-between">
             <button type="button" onClick={prev} className="neo-btn bg-white text-[#1B1C20] px-6 py-3 font-bold text-sm inline-flex items-center gap-2">

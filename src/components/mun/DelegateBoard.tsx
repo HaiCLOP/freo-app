@@ -28,9 +28,11 @@ const COLUMNS = [
 interface DelegateBoardProps {
   conferenceId: string;
   initialRegistrations: Record<string, unknown>[];
+  committees: { id: string, name: string, short_name: string }[];
+  portfolios: { id: string, committee_id: string, name: string }[];
 }
 
-export function DelegateBoard({ conferenceId, initialRegistrations }: DelegateBoardProps) {
+export function DelegateBoard({ conferenceId, initialRegistrations, committees, portfolios }: DelegateBoardProps) {
   const [registrations, setRegistrations] = useState(initialRegistrations);
   const [searchQuery, setSearchQuery] = useState("");
   const [schoolFilter, setSchoolFilter] = useState("");
@@ -94,6 +96,32 @@ export function DelegateBoard({ conferenceId, initialRegistrations }: DelegateBo
     });
   };
 
+  const exportToCSV = () => {
+    const headers = ["Name", "Email", "Phone", "School", "Grade", "Status", "Experience", "Payment Status"];
+    const csvContent = [
+      headers.join(","),
+      ...filtered.map(r => [
+        `"${r.delegate_name}"`,
+        `"${r.delegate_email}"`,
+        `"${r.delegate_phone}"`,
+        `"${r.delegate_school}"`,
+        `"${r.delegate_grade || ''}"`,
+        `"${r.status}"`,
+        `"${r.experience_level}"`,
+        `"${r.payment_verified ? 'Verified' : 'Pending'}"`
+      ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `delegates_${conferenceId}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -103,9 +131,18 @@ export function DelegateBoard({ conferenceId, initialRegistrations }: DelegateBo
             <Users size={20} />
             Delegate Management
           </h2>
-          <p className="text-sm text-[#6B7280]">
-            {registrations.length} total registration{registrations.length !== 1 ? "s" : ""}
-          </p>
+          <div className="flex items-center gap-4 mt-1">
+            <p className="text-sm text-[#6B7280]">
+              {registrations.length} total registration{registrations.length !== 1 ? "s" : ""}
+            </p>
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-1.5 text-xs font-bold text-[#1B1C20] hover:text-[#DDFE55] transition-colors"
+            >
+              <Download size={14} />
+              Export CSV
+            </button>
+          </div>
         </div>
 
         {/* Bulk actions */}
@@ -290,6 +327,35 @@ export function DelegateBoard({ conferenceId, initialRegistrations }: DelegateBo
                             >
                               View Screenshot
                             </button>
+                          </div>
+                        )}
+
+                        {/* Manual Portfolio Allocation */}
+                        {(reg.status as string) === 'APPROVED' && (
+                          <div className="mt-3 pt-3 border-t border-[#e5e7eb]">
+                            <p className="text-[10px] font-bold text-[#1B1C20] mb-2 uppercase">Portfolio Assignment</p>
+                            <div className="flex gap-2">
+                              <select 
+                                className="neo-badge text-xs px-2 py-1 flex-1 bg-[#f3f4f6]"
+                                value={(reg.portfolio_allotted as string) || ""}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  startTransition(async () => {
+                                    const { manualAllotment } = await import("@/lib/mun/actions/allotment");
+                                    await manualAllotment(reg.id as string, e.target.value || null, conferenceId);
+                                    setRegistrations(prev => prev.map(r => r.id === reg.id ? { ...r, portfolio_allotted: e.target.value || null } : r));
+                                  });
+                                }}
+                              >
+                                <option value="">-- Unassigned --</option>
+                                {portfolios.map(p => {
+                                  const c = committees.find(c => c.id === p.committee_id);
+                                  return (
+                                    <option key={p.id} value={p.id}>{c?.short_name}: {p.name}</option>
+                                  );
+                                })}
+                              </select>
+                            </div>
                           </div>
                         )}
                       </div>

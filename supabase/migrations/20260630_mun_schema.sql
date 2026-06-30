@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS mun_conferences (
   google_sheet_id text,
   razorpay_link   text,
   refund_policy   text,
+  upi_id          text,
+  upi_qr_url      text,
+  banner_url      text,
+  custom_form_schema jsonb DEFAULT '[]'::jsonb,
+  form_settings   jsonb DEFAULT '{}'::jsonb,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

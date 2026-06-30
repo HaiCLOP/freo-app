@@ -55,7 +55,7 @@ export async function runAIAllotment(conferenceId: string, committeeId: string) 
   }));
 
   if (availablePortfolios.length === 0) {
-    return { success: false, message: "No available portfolios in this committee", count: 0 };
+    return { success: false, message: "No available portfolios in this committee", count: 0, preview: [] };
   }
 
   // 3. Prepare AI Prompt
@@ -86,7 +86,10 @@ Return ONLY the JSON array, no markdown formatting.
 
   // 4. Call Gemini AI
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      generationConfig: { responseMimeType: "application/json" }
+    });
     const result = await model.generateContent(prompt);
     let text = result.response.text().trim();
     if (text.startsWith("```json")) {
@@ -97,25 +100,43 @@ Return ONLY the JSON array, no markdown formatting.
     
     const assignments: Array<{ registration_id: string, portfolio_id: string }> = JSON.parse(text);
 
-    // 5. Save allotments to DB
-    let count = 0;
+    // Prepare preview data (DO NOT save to DB yet)
+    const preview = [];
     for (const assignment of assignments) {
-      // Validate that both exist
-      if (delegates.find(d => d.id === assignment.registration_id) && availablePortfolios.find(p => p.id === assignment.portfolio_id)) {
-        await supabase
-          .from("mun_registrations")
-          .update({ portfolio_allotted: assignment.portfolio_id })
-          .eq("id", assignment.registration_id);
-        count++;
+      const del = delegates.find(d => d.id === assignment.registration_id);
+      const port = availablePortfolios.find(p => p.id === assignment.portfolio_id);
+      if (del && port) {
+        preview.push({
+          registration_id: del.id,
+          portfolio_id: port.id,
+          delegate_name: del.delegate_name,
+          portfolio_name: port.name
+        });
       }
     }
 
-    return { success: true, count, message: `Successfully allotted ${count} delegates.` };
+    return { success: true, count: preview.length, message: `Successfully generated ${preview.length} allotments.`, preview };
 
   } catch (error: any) {
     console.error("AI Allotment Error:", error);
     throw new Error("Failed to run AI allotment: " + error.message);
   }
+}
+
+export async function confirmAllotment(conferenceId: string, committeeId: string, assignments: Array<{ registration_id: string, portfolio_id: string }>) {
+  await enforceMunRateLimit("allotment", conferenceId);
+  const supabase = await createClient();
+  
+  let count = 0;
+  for (const assignment of assignments) {
+    const { error } = await supabase
+      .from("mun_registrations")
+      .update({ portfolio_allotted: assignment.portfolio_id })
+      .eq("id", assignment.registration_id);
+    if (!error) count++;
+  }
+  
+  return { success: true, count, message: `Successfully committed ${count} allotments.` };
 }
 
 export async function clearAllotments(conferenceId: string, committeeId: string) {
@@ -140,4 +161,16 @@ export async function clearAllotments(conferenceId: string, committeeId: string)
   if (error) throw new Error("Failed to clear allotments: " + error.message);
   
   return { success: true, count: count || 0 };
+}
+
+export async function manualAllotment(registrationId: string, portfolioId: string | null, conferenceId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("mun_registrations")
+    .update({ portfolio_allotted: portfolioId })
+    .eq("id", registrationId)
+    .eq("conference_id", conferenceId);
+
+  if (error) throw new Error("Failed to assign portfolio: " + error.message);
+  return { success: true };
 }

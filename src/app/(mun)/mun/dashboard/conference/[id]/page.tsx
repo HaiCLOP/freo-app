@@ -1,5 +1,7 @@
 import { getConference } from "@/lib/mun/actions/conference";
 import { CalendarDays, Users, Layers, Globe, CreditCard } from "lucide-react";
+import { CopyLinkButton } from "@/components/mun/CopyLinkButton";
+import { headers } from "next/headers";
 
 export default async function ConferenceOverviewPage({
   params,
@@ -8,6 +10,9 @@ export default async function ConferenceOverviewPage({
 }) {
   const { id } = await params;
   const conf = await getConference(id);
+  const headersList = await headers();
+  const origin = headersList.get("origin") || "http://localhost:3000";
+  const publicLink = `${origin}/c/${conf.slug}`;
 
   const stats = [
     { label: "Committees", value: conf.committees.length, icon: Layers, color: "#3B82F6" },
@@ -103,14 +108,9 @@ export default async function ConferenceOverviewPage({
           </h3>
           <div className="flex items-center gap-3">
             <code className="bg-white/10 px-4 py-2 neo-badge text-sm text-[#DDFE55] flex-1 truncate">
-              freo.haicloplabs.in/c/{conf.slug}
+              {publicLink}
             </code>
-            <button
-              onClick={() => {}}
-              className="neo-btn bg-[#DDFE55] text-[#1B1C20] px-4 py-2 text-sm font-bold shrink-0"
-            >
-              Copy
-            </button>
+            <CopyLinkButton link={publicLink} />
           </div>
         </div>
       )}

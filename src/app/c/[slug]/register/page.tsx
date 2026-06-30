@@ -54,6 +54,10 @@ export default async function RegisterPage({
         name: conf.name,
         org_name: conf.org_name,
         delegate_fee: conf.delegate_fee,
+        banner_url: conf.banner_url || null,
+        upi_id: conf.upi_id || null,
+        upi_qr_url: conf.upi_qr_url || null,
+        razorpay_link: conf.razorpay_link || null,
         committees: conf.committees,
       }}
     />

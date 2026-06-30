@@ -24,8 +24,8 @@ function createLimiter(maxRequests: number, windowMs: `${number} ms` | `${number
 // ─── Limiter Instances ────────────────────────────────────────────────────
 
 const limiters = {
-  registration: createLimiter(5, "60 m"),
-  allotment: createLimiter(3, "60 m"),
+  registration: createLimiter(1000, "50 m"), // 3000 seconds in minutes
+  allotment: createLimiter(1000, "30 s"),
   paperUpload: createLimiter(10, "1440 m"),
   certGeneration: createLimiter(5, "1440 m"),
   qrValidation: createLimiter(30, "1 m"),

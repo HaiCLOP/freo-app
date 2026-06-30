@@ -7,24 +7,24 @@ const footerLinks = {
     { label: "Features", href: "/features" },
     { label: "Pricing", href: "/pricing" },
     { label: "Scanner App", href: "/features#scanner" },
-    { label: "Changelog", href: "#" },
+    { label: "Changelog", href: "/changelog" },
   ],
   Company: [
     { label: "About", href: "/about" },
-    { label: "Blog", href: "#" },
-    { label: "Careers", href: "#" },
-    { label: "Contact", href: "#" },
+    { label: "Blog", href: "/blog" },
+    { label: "Careers", href: "/careers" },
+    { label: "Contact", href: "/contact" },
   ],
   Resources: [
-    { label: "Documentation", href: "#" },
-    { label: "API Reference", href: "#" },
-    { label: "Community", href: "#" },
-    { label: "Status", href: "#" },
+    { label: "Documentation", href: "/docs" },
+    { label: "API Reference", href: "/api-reference" },
+    { label: "Community", href: "/community" },
+    { label: "Status", href: "/status" },
   ],
   Legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
-    { label: "Cookie Policy", href: "#" },
+    { label: "Privacy Policy", href: "/legal/privacy" },
+    { label: "Terms of Service", href: "/legal/terms" },
+    { label: "Cookie Policy", href: "/legal/cookies" },
   ],
 };
 
@@ -82,7 +82,9 @@ export function Footer() {
             {["Twitter", "GitHub", "Instagram"].map((s) => (
               <a
                 key={s}
-                href="#"
+                href={`https://${s.toLowerCase()}.com`}
+                target="_blank"
+                rel="noreferrer"
                 className="font-inter font-bold text-[12px] text-[#80827f] hover:text-white uppercase tracking-wider transition-colors px-3 py-1.5 border-2 border-[#80827f]/30 hover:border-white/50"
               >
                 {s}

@@ -38,21 +38,34 @@ export async function submitRegistration(conferenceId: string, formData: FormDat
 
   const raw = Object.fromEntries(formData.entries());
 
-  const parsed = registrationSchema.parse({
-    delegate_name: raw.delegate_name,
-    delegate_email: raw.delegate_email,
-    delegate_phone: raw.delegate_phone,
-    delegate_school: raw.delegate_school,
-    delegate_grade: raw.delegate_grade || undefined,
-    experience_level: raw.experience_level,
-    committee_pref_1: raw.committee_pref_1,
-    committee_pref_2: raw.committee_pref_2 || undefined,
-    committee_pref_3: raw.committee_pref_3 || undefined,
-    payment_utr: raw.payment_utr || undefined,
-    custom_form_data: raw.custom_form_data
-      ? JSON.parse(raw.custom_form_data as string)
-      : undefined,
-  });
+  let parsed;
+  try {
+    parsed = registrationSchema.parse({
+      delegate_name: raw.delegate_name,
+      delegate_email: raw.delegate_email,
+      delegate_phone: raw.delegate_phone,
+      delegate_school: raw.delegate_school,
+      delegate_grade: raw.delegate_grade || undefined,
+      experience_level: raw.experience_level,
+      committee_pref_1: raw.committee_pref_1,
+      committee_pref_2: raw.committee_pref_2 || undefined,
+      committee_pref_3: raw.committee_pref_3 || undefined,
+      payment_utr: raw.payment_utr || undefined,
+      custom_form_data: raw.custom_form_data
+        ? JSON.parse(raw.custom_form_data as string)
+        : undefined,
+    });
+  } catch (zodErr: any) {
+    if (zodErr?.issues) {
+      const messages = zodErr.issues.map((i: any) => {
+        const field = (i.path || []).join(".");
+        const label = field.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+        return `${label}: ${i.message}`;
+      });
+      throw new Error(messages.join(" | "));
+    }
+    throw zodErr;
+  }
 
   // Check for duplicate email in this conference
   const { data: existing } = await supabase
@@ -71,6 +84,33 @@ export async function submitRegistration(conferenceId: string, formData: FormDat
   const isObserver = raw.registration_type === "observer";
   const isPress = raw.registration_type === "press";
 
+  // Handle Payment Screenshot Upload
+  let paymentScreenshotUrl: string | undefined = undefined;
+  let uploadedFilePath: string | undefined = undefined;
+
+  const paymentFile = formData.get("payment_screenshot") as File | null;
+  if (paymentFile && paymentFile.size > 0) {
+    if (paymentFile.size > 5 * 1024 * 1024) throw new Error("Payment screenshot too large (max 5MB)");
+    
+    const { uploadFile } = await import("@/lib/storage");
+    const fileExt = paymentFile.name.split('.').pop() || 'png';
+    const safeName = parsed.delegate_name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const filename = `payment_${safeName}_${Date.now()}.${fileExt}`;
+    
+    try {
+      paymentScreenshotUrl = await uploadFile(
+        conf.creator_id, 
+        conf.slug || conf.id, 
+        "mun_payments", 
+        filename, 
+        paymentFile, 
+        false
+      );
+    } catch (uploadError: any) {
+      throw new Error(`Failed to upload payment screenshot: ${uploadError.message}`);
+    }
+  }
+
   const { data: reg, error } = await supabase
     .from("mun_registrations")
     .insert({
@@ -85,11 +125,18 @@ export async function submitRegistration(conferenceId: string, formData: FormDat
         ...(parsed.custom_form_data || {}),
         registration_type: isObserver ? "observer" : isPress ? "press" : "delegate",
       },
+      payment_screenshot_url: paymentScreenshotUrl,
     })
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Rollback file upload if DB insert fails
+    if (uploadedFilePath) {
+      await supabase.storage.from("mun_payments").remove([uploadedFilePath]);
+    }
+    throw new Error(error.message);
+  }
 
   // Send acknowledgment email
   await sendEmail({
@@ -108,7 +155,7 @@ export async function submitRegistration(conferenceId: string, formData: FormDat
         <p style="color: #6B7280; font-size: 13px;">You'll receive another email once your application is reviewed.</p>
       </div>
     `,
-    from: `Freo MUN <noreply@freo.haicloplabs.in>`,
+    from: `Freo MUN <noreply@${process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : "localhost"}>`,
   });
 
   return reg as Registration;
@@ -191,7 +238,7 @@ export async function updateRegistrationStatus(
             <p style="color: #6B7280; font-size: 13px; margin-top: 24px;">— Freo MUN</p>
           </div>
         `,
-        from: `Freo MUN <noreply@freo.haicloplabs.in>`,
+        from: `Freo MUN <noreply@${process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : "localhost"}>`,
       });
     }
   }
@@ -277,7 +324,7 @@ async function autoFillFromWaitlist(conferenceId: string) {
           <p>You'll receive your portfolio allotment soon.</p>
         </div>
       `,
-      from: `Freo MUN <noreply@freo.haicloplabs.in>`,
+      from: `Freo MUN <noreply@${process.env.NEXT_PUBLIC_APP_URL ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname : "localhost"}>`,
     });
   }
 }

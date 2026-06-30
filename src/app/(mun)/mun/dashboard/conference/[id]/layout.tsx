@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/allotment", label: "Allotment", icon: Sparkles },
   { href: "/eb", label: "Executive Board", icon: Shield },
   { href: "/committees", label: "Committees", icon: Layers },
+  { href: "/form-builder", label: "Form Builder", icon: FileText },
   { href: "/papers", label: "Position Papers", icon: FileText },
   { href: "/awards", label: "Awards", icon: Award },
   { href: "/checkin", label: "Check-in", icon: QrCode },

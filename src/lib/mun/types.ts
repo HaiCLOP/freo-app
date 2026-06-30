@@ -405,7 +405,7 @@ export const createPortfolioSchema = z.object({
 export const registrationSchema = z.object({
   delegate_name: z.string().min(2).max(200),
   delegate_email: z.string().email().max(254),
-  delegate_phone: z.string().regex(/^[+]?[\d\s-]{10,15}$/, "Invalid phone number"),
+  delegate_phone: z.string().min(7, "Phone number too short").max(20, "Phone number too long").regex(/^[+]?[\d\s\-().]{7,20}$/, "Invalid phone number"),
   delegate_school: z.string().min(2).max(300),
   delegate_grade: z.string().max(50).optional(),
   experience_level: z.enum(["NONE", "BEGINNER", "INTERMEDIATE", "ADVANCED"]),

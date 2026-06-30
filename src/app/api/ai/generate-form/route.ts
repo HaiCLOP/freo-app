@@ -1,13 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { checkAiFormLimit } from "@/lib/rate-limit";
 import { NextResponse } from "next/server";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-const groq = createOpenAI({
-  baseURL: 'https://api.groq.com/openai/v1',
-  apiKey: process.env.GROQ_API_KEY || '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',
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 export async function POST(req: Request) {
@@ -34,19 +33,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid prompt" }, { status: 400 });
     }
 
-    // Generate Form Object via Groq
+    // Generate Form Object via Gemini
     const { object } = await generateObject({
-      model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
+      model: google("gemini-2.5-flash"),
       schema: z.object({
         fields: z.array(z.object({
           id: z.string(),
           type: z.enum(["text", "long_text", "number", "email", "phone", "dropdown", "checkbox", "radio", "file_upload", "date", "time", "rating", "linear_scale", "section_divider", "page_break", "checkbox_grid"]),
           label: z.string(),
-          placeholder: z.string().optional(),
-          description: z.string().optional(),
+          placeholder: z.string().describe("Use empty string if not applicable"),
+          description: z.string().describe("Use empty string if not applicable"),
           required: z.boolean(),
           locked: z.boolean(),
-          options: z.string().optional(),
+          options: z.string().describe("Comma separated options for choice fields. Use empty string if not applicable"),
         }))
       }),
       prompt: `You are an expert form designer. The user wants to create a form for the following purpose: "${prompt}".
